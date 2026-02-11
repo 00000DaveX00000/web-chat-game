@@ -1,7 +1,7 @@
 /**
- * WebSocket client for the AI Raid Battle game.
- * Handles connection, state updates, battle log, character cards,
- * boss info panel, game timer, command bar, and tab filtering.
+ * WebSocket client for the AI Raid Battle game (V3).
+ * Handles 6-card layout (Boss + 5 players), AI Log panel,
+ * tactical commands, and battle log filtering.
  */
 var GameWS = (function () {
   'use strict';
@@ -17,6 +17,7 @@ var GameWS = (function () {
 
   // Role display config
   var ROLE_ICONS = {
+    boss: '\u{1F525}',   // fire
     tank: '\u{1F6E1}',   // shield
     healer: '\u{2695}',  // medical
     mage: '\u{1F52E}',   // crystal ball
@@ -25,11 +26,12 @@ var GameWS = (function () {
   };
 
   var ROLE_NAMES = {
-    tank: '\u5766\u514B',     // 坦克
-    healer: '\u6CBB\u7597',   // 治疗
-    mage: '\u6CD5\u5E08',     // 法师
-    rogue: '\u76D7\u8D3C',    // 盗贼
-    hunter: '\u730E\u4EBA'    // 猎人
+    boss: 'BOSS',
+    tank: '\u5766\u514B',
+    healer: '\u6CBB\u7597',
+    mage: '\u6CD5\u5E08',
+    rogue: '\u76D7\u8D3C',
+    hunter: '\u730E\u4EBA'
   };
 
   function _getUrl() {
@@ -101,92 +103,109 @@ var GameWS = (function () {
     text.textContent = Math.round(pct) + '%';
   }
 
-  /* ---- Boss Info Panel ---- */
-  function _updateBossInfo(boss) {
-    if (!boss) return;
+  /* ---- Boss Card ---- */
+  function _updateBossCard(bossCard) {
+    if (!bossCard) return;
+    var card = document.getElementById('card-boss');
+    if (!card) return;
 
-    var nameEl = document.getElementById('boss-info-name');
-    var fillEl = document.getElementById('boss-hp-bar-fill');
-    var hpTextEl = document.getElementById('boss-hp-text');
-    var phaseEl = document.getElementById('boss-phase-text');
-    var castBar = document.getElementById('boss-cast-bar');
-    var castName = document.getElementById('boss-cast-name');
-    var castFill = document.getElementById('boss-cast-fill');
-    var castTime = document.getElementById('boss-cast-time');
-    var mechEl = document.getElementById('boss-mechanics');
-    var debuffEl = document.getElementById('boss-debuffs');
-    var enrageEl = document.getElementById('boss-enrage');
+    var alive = bossCard.alive !== false && bossCard.hp > 0;
+    if (alive) {
+      card.classList.remove('dead');
+    } else {
+      card.classList.add('dead');
+    }
 
-    if (nameEl) nameEl.textContent = boss.name || 'BOSS';
+    // Header
+    var iconEl = card.querySelector('.card-icon');
+    var nameEl = card.querySelector('.card-name');
+    if (iconEl) iconEl.textContent = ROLE_ICONS.boss;
+    if (nameEl) nameEl.textContent = bossCard.name || 'BOSS';
 
-    var pct = boss.hp_percent !== undefined ? boss.hp_percent : (boss.hp / boss.max_hp * 100);
-    if (fillEl) fillEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
-    if (hpTextEl) hpTextEl.textContent = Math.round(pct * 10) / 10 + '% (' + boss.hp + '/' + boss.max_hp + ')';
+    // Source tag
+    _updateSourceTag(card, bossCard);
 
-    var phaseNames = { 1: 'Phase 1 - \u89C9\u9192', 2: 'Phase 2 - \u72C2\u6012', 3: 'Phase 3 - \u706D\u4E16' };
-    if (phaseEl) phaseEl.textContent = phaseNames[boss.phase] || 'Phase ' + boss.phase;
+    // HP bar
+    var hpPct = bossCard.max_hp > 0 ? (bossCard.hp / bossCard.max_hp) : 0;
+    var hpFill = card.querySelector('.hp-fill');
+    var hpText = card.querySelector('.hp-text');
+    if (hpFill) {
+      hpFill.style.width = (hpPct * 100) + '%';
+      hpFill.className = 'bar-fill hp-fill' + (hpPct > 0.6 ? '' : hpPct > 0.3 ? ' mid' : ' low');
+    }
+    if (hpText) hpText.textContent = 'HP ' + bossCard.hp + '/' + bossCard.max_hp;
+
+    // Boss badges (phase, adds, enrage)
+    var badgesEl = card.querySelector('.boss-badges');
+    if (badgesEl) {
+      var bhtml = '';
+      bhtml += '<span class="boss-badge phase-badge">P' + (bossCard.phase || 1) + '</span>';
+      var addsCount = bossCard.adds_count || 0;
+      if (addsCount > 0) {
+        bhtml += '<span class="boss-badge adds-badge">Adds:' + addsCount + '</span>';
+      }
+      if (bossCard.enraged) {
+        bhtml += '<span class="boss-badge enrage-badge">\u72C2\u66B4!</span>';
+      } else if (bossCard.enrage_timer !== null && bossCard.enrage_timer !== undefined) {
+        bhtml += '<span class="boss-badge enrage-timer-badge">\u72C2\u66B4:' + Math.ceil(bossCard.enrage_timer) + 's</span>';
+      }
+      badgesEl.innerHTML = bhtml;
+    }
+
+    // Skill slots
+    _updateSkillSlots(card, bossCard);
 
     // Cast bar
-    if (castBar) {
-      if (boss.casting) {
-        castBar.classList.remove('hidden');
-        if (castName) castName.textContent = boss.casting.name;
-        if (castTime) castTime.textContent = boss.casting.remaining.toFixed(1) + 's';
-        var totalCast = boss.casting.name === '\u706D\u4E16\u4E4B\u708E' ? 3.0 : 2.0;
-        var progress = Math.max(0, 1 - boss.casting.remaining / totalCast) * 100;
-        if (castFill) castFill.style.width = progress + '%';
+    var castBarEl = card.querySelector('.card-cast-bar');
+    if (castBarEl) {
+      if (bossCard.casting) {
+        castBarEl.classList.remove('hidden');
+        var castFillEl = castBarEl.querySelector('.card-cast-fill');
+        var castTextEl = castBarEl.querySelector('.card-cast-text');
+        var totalCast = bossCard.casting.skill_name === '\u706D\u4E16\u4E4B\u708E' ? 3.0 : 2.0;
+        var progress = Math.max(0, 1 - bossCard.casting.remaining / totalCast) * 100;
+        if (castFillEl) castFillEl.style.width = progress + '%';
+        if (castTextEl) castTextEl.textContent = bossCard.casting.skill_name + ' ' + bossCard.casting.remaining.toFixed(1) + 's';
       } else {
-        castBar.classList.add('hidden');
+        castBarEl.classList.add('hidden');
       }
     }
 
-    // Mechanics (fissures + traps + adds)
-    if (mechEl) {
-      var mechHtml = '';
-      var fissures = boss.fissures || [];
-      for (var i = 0; i < fissures.length; i++) {
-        mechHtml += '<div class="mech-item">\u7194\u5CA9\u88C2\u96D9 \u2192 ' + (ROLE_NAMES[fissures[i].target] || fissures[i].target) + ' (' + fissures[i].duration.toFixed(1) + 's)</div>';
+    // Action / Reason
+    var actionEl = card.querySelector('.card-action');
+    if (actionEl) {
+      if (bossCard.last_action && bossCard.last_action.skill_name) {
+        var src = bossCard.last_action.source || '';
+        var srcIcon = src === 'ai' ? '\u{1F916}' : src === 'timeout' ? '\u23F1' : '\u2699';
+        actionEl.textContent = srcIcon + ' ' + bossCard.last_action.skill_name + ' \u2192 ' + (bossCard.last_action.target || '');
+        actionEl.className = 'card-action source-' + src;
+      } else {
+        actionEl.textContent = '';
+        actionEl.className = 'card-action';
       }
-      var traps = boss.traps || [];
-      for (var j = 0; j < traps.length; j++) {
-        mechHtml += '<div class="mech-item">\u7194\u5CA9\u9677\u9631 \u2192 ' + (ROLE_NAMES[traps[j].target] || traps[j].target) + ' (' + traps[j].countdown.toFixed(1) + 's)</div>';
+    }
+    var reasonEl = card.querySelector('.card-reason');
+    if (reasonEl) {
+      if (bossCard.last_action && bossCard.last_action.reason) {
+        reasonEl.textContent = '\u{1F4AD} "' + bossCard.last_action.reason + '"';
+      } else {
+        reasonEl.textContent = '';
       }
-      var adds = boss.adds || [];
-      var aliveAdds = 0;
-      for (var k = 0; k < adds.length; k++) {
-        if (adds[k].alive) aliveAdds++;
-      }
-      if (aliveAdds > 0) {
-        mechHtml += '<div class="mech-item">\u7194\u5CA9\u5143\u7D20 \u00D7' + aliveAdds + ' \u5B58\u6D3B</div>';
-      }
-      mechEl.innerHTML = mechHtml;
     }
 
-    // Debuffs on boss
-    if (debuffEl) {
-      var dHtml = '';
-      var debuffs = boss.debuffs || [];
+    // Buffs/Debuffs
+    var buffsEl = card.querySelector('.card-buffs');
+    if (buffsEl) {
+      var bhtml2 = '';
+      var debuffs = bossCard.debuffs || [];
       for (var d = 0; d < debuffs.length; d++) {
-        dHtml += debuffs[d].name + '(' + debuffs[d].duration.toFixed(1) + 's) ';
+        bhtml2 += '<span class="debuff-item">' + debuffs[d].name + '(' + Math.ceil(debuffs[d].duration) + 's) </span>';
       }
-      debuffEl.textContent = dHtml ? 'Debuff: ' + dHtml : '';
-    }
-
-    // Enrage
-    if (enrageEl) {
-      if (boss.enraged) {
-        enrageEl.classList.remove('hidden');
-        enrageEl.textContent = '\u72C2\u66B4\u4E2D!';
-      } else if (boss.enrage_timer !== null && boss.enrage_timer !== undefined) {
-        enrageEl.classList.remove('hidden');
-        enrageEl.textContent = '\u72C2\u66B4\u5012\u8BA1: ' + Math.ceil(boss.enrage_timer) + 's';
-      } else {
-        enrageEl.classList.add('hidden');
-      }
+      buffsEl.innerHTML = bhtml2 || '';
     }
   }
 
-  /* ---- Character Cards ---- */
+  /* ---- Character Cards (5 players) ---- */
   function _updateCharCards(characters) {
     if (!characters) return;
     var roles = ['tank', 'healer', 'mage', 'rogue', 'hunter'];
@@ -203,8 +222,6 @@ var GameWS = (function () {
     if (!card) return;
 
     var alive = c.alive !== false && c.hp > 0;
-
-    // Dead state
     if (alive) {
       card.classList.remove('dead');
     } else {
@@ -214,11 +231,10 @@ var GameWS = (function () {
     // Header
     var iconEl = card.querySelector('.card-icon');
     var nameEl = card.querySelector('.card-name');
-
     if (iconEl) iconEl.textContent = ROLE_ICONS[role] || '';
     if (nameEl) nameEl.textContent = (ROLE_NAMES[role] || role);
 
-    // Source tag (decision source)
+    // Source tag
     _updateSourceTag(card, c);
 
     // HP bar
@@ -238,7 +254,7 @@ var GameWS = (function () {
     if (mpFill) mpFill.style.width = (mpPct * 100) + '%';
     if (mpText) mpText.textContent = (c.resource_name || 'MP') + ' ' + c.mana + '/' + c.max_mana;
 
-    // Skill slots (WoW-style)
+    // Skill slots
     _updateSkillSlots(card, c);
 
     // Cast bar
@@ -255,7 +271,7 @@ var GameWS = (function () {
       }
     }
 
-    // Instruction (what god command / environment instruction was active)
+    // Instruction (god command highlight with flash)
     var instrEl = card.querySelector('.card-instruction');
     if (instrEl) {
       var instrText = '';
@@ -263,22 +279,28 @@ var GameWS = (function () {
         instrText = c.last_action.instruction;
       }
       if (instrText) {
+        var oldText = instrEl.getAttribute('data-last') || '';
         instrEl.textContent = '\u{1F4E5} \u6307\u4EE4: "' + instrText + '"';
         instrEl.style.display = '';
+        if (instrText !== oldText) {
+          instrEl.classList.remove('flash');
+          void instrEl.offsetWidth; // force reflow
+          instrEl.classList.add('flash');
+          instrEl.setAttribute('data-last', instrText);
+        }
       } else {
         instrEl.textContent = '';
         instrEl.style.display = 'none';
       }
     }
 
-    // Action (what the agent actually did)
+    // Action
     var actionEl = card.querySelector('.card-action');
     if (actionEl) {
       if (c.last_action && c.last_action.skill_name) {
-        var actionTarget = c.last_action.target || '';
         var actionSource = c.last_action.source || '';
         var sourceIcon = actionSource === 'ai' ? '\u{1F916}' : actionSource === 'timeout' ? '\u23F1' : '\u2699';
-        actionEl.textContent = sourceIcon + ' ' + c.last_action.skill_name + ' \u2192 ' + actionTarget;
+        actionEl.textContent = sourceIcon + ' ' + c.last_action.skill_name + ' \u2192 ' + (c.last_action.target || '');
         actionEl.className = 'card-action source-' + actionSource;
       } else {
         actionEl.textContent = '';
@@ -286,7 +308,7 @@ var GameWS = (function () {
       }
     }
 
-    // Reason (AI decision reasoning)
+    // Reason
     var reasonEl = card.querySelector('.card-reason');
     if (reasonEl) {
       if (c.last_action && c.last_action.reason) {
@@ -312,7 +334,7 @@ var GameWS = (function () {
     }
   }
 
-  /* ---- Source Tag (Decision Source) ---- */
+  /* ---- Source Tag ---- */
   function _updateSourceTag(card, charData) {
     var tag = card.querySelector('.source-tag');
     if (!tag) return;
@@ -326,10 +348,10 @@ var GameWS = (function () {
       tag.textContent = '\u{1F916} AI\u51B3\u7B56';
       tag.className = 'source-tag ai-decision';
     } else if (la && la.source === 'timeout') {
-      tag.textContent = '\u23F1 \u8D85\u65F6\u9ED8\u8BA4';
+      tag.textContent = '\u23F1 \u8D85\u65F6';
       tag.className = 'source-tag timeout';
     } else if (la && la.source === 'auto') {
-      tag.textContent = '\u2699 \u81EA\u52A8\u56DE\u9000';
+      tag.textContent = '\u2699 \u81EA\u52A8';
       tag.className = 'source-tag auto';
     } else {
       tag.textContent = '\u23F3 \u7B49\u5F85\u4E2D';
@@ -337,7 +359,7 @@ var GameWS = (function () {
     }
   }
 
-  /* ---- Skill Slots (WoW-style) ---- */
+  /* ---- Skill Slots ---- */
   function _updateSkillSlots(card, charData) {
     var skills = charData.skills || [];
     var cooldowns = charData.cooldowns || {};
@@ -345,8 +367,16 @@ var GameWS = (function () {
     var slots = card.querySelectorAll('.skill-slot');
     var now = Date.now() / 1000;
 
-    for (var i = 0; i < Math.min(skills.length, 4); i++) {
-      var skill = skills[i];
+    // Filter to non-auto skills for display
+    var displaySkills = [];
+    for (var s = 0; s < skills.length; s++) {
+      if (!skills[s].auto) {
+        displaySkills.push(skills[s]);
+      }
+    }
+
+    for (var i = 0; i < Math.min(displaySkills.length, 4); i++) {
+      var skill = displaySkills[i];
       var slot = slots[i];
       if (!slot) continue;
 
@@ -355,10 +385,7 @@ var GameWS = (function () {
         && lastAction.skill_name === skill.name
         && (now - lastAction.time) < 2;
 
-      // Reset classes
       slot.className = 'skill-slot';
-
-      // Skill icon (name)
       var iconEl = slot.querySelector('.skill-icon');
       var cdTextEl = slot.querySelector('.cd-text');
 
@@ -375,37 +402,105 @@ var GameWS = (function () {
         if (cdTextEl) cdTextEl.textContent = 'RDY';
       }
 
-      // Tooltip on hover
       slot.title = skill.name + (cd > 0 ? ' (CD: ' + Math.ceil(cd) + 's)' : ' (Ready)');
+    }
+
+    // Hide unused slots
+    for (var j = displaySkills.length; j < slots.length; j++) {
+      if (slots[j]) {
+        slots[j].className = 'skill-slot';
+        var ic = slots[j].querySelector('.skill-icon');
+        var ct = slots[j].querySelector('.cd-text');
+        if (ic) ic.textContent = '';
+        if (ct) ct.textContent = '';
+      }
     }
   }
 
-  /* ---- Log classification (improved) ---- */
+  /* ---- AI Log Panel ---- */
+  function _updateAiLog(aiLog) {
+    var container = document.getElementById('ai-log');
+    if (!container || !aiLog || !aiLog.length) return;
+
+    container.innerHTML = '';
+    for (var i = 0; i < aiLog.length; i++) {
+      var entry = aiLog[i];
+      if (!entry.last_response) continue;
+
+      var role = entry.role || '';
+      var isBoss = entry.is_boss;
+      var div = document.createElement('div');
+      div.className = 'ai-log-entry ' + role + '-entry';
+
+      // Header
+      var icon = ROLE_ICONS[role] || '';
+      var name = entry.name || entry.id || role;
+      var respTime = entry.last_response.time ? _formatTimeSince(entry.last_response.time) : '';
+
+      var html = '<div class="ai-log-header">';
+      html += '<span class="ai-log-name">' + icon + ' ' + _escHtml(name) + '</span>';
+      html += '<span class="ai-log-time">' + respTime + '</span>';
+      html += '</div>';
+
+      // Query (truncated)
+      if (entry.last_query) {
+        var queryPreview = entry.last_query.substring(0, 200);
+        if (entry.last_query.length > 200) queryPreview += '...';
+        html += '<div class="ai-log-query">Q: ' + _escHtml(queryPreview) + '</div>';
+      }
+
+      // Response
+      if (entry.last_response.tool_name) {
+        var skillName = entry.last_response.tool_name.replace('use_', '');
+        var target = entry.last_response.target || '';
+        html += '<div class="ai-log-response">A: ' + _escHtml(entry.last_response.tool_name) + ' \u2192 ' + _escHtml(target) + '</div>';
+      }
+
+      // Reason
+      if (entry.last_response.reason) {
+        html += '<div class="ai-log-reason">\u{1F4AD} "' + _escHtml(entry.last_response.reason) + '"</div>';
+      }
+
+      div.innerHTML = html;
+      container.appendChild(div);
+    }
+  }
+
+  function _formatTimeSince(timestamp) {
+    var now = Date.now() / 1000;
+    var diff = Math.floor(now - timestamp);
+    if (diff < 1) return 'just now';
+    if (diff < 60) return diff + 's ago';
+    return Math.floor(diff / 60) + 'm ago';
+  }
+
+  function _escHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /* ---- Log classification ---- */
   function _classifyLog(text) {
     if (!text) return 'system';
-    // AI decision / timeout
     if (text.indexOf('\u{1F916}') !== -1 || text.indexOf('\u8C03\u7528') !== -1) {
       return 'ai_decision';
     }
     if (text.indexOf('\u23F1') !== -1 && text.indexOf('\u8D85\u65F6') !== -1) {
       return 'ai_decision';
     }
-    // Command / God
     if (text.indexOf('[God]') !== -1 || text.indexOf('[DM]') !== -1 || text.indexOf('\u4E0A\u5E1D\u6307\u4EE4') !== -1) {
       return 'cmd';
     }
-    // Mechanic / Phase
     if (text.indexOf('Phase') !== -1 || text.indexOf('===') !== -1 || text.indexOf('>>>') !== -1 ||
         text.indexOf('\u72C2\u66B4') !== -1 || text.indexOf('\u706D\u4E16') !== -1 || text.indexOf('\u70C8\u7130\u98CE\u66B4') !== -1 ||
         text.indexOf('\u53EC\u5524') !== -1 || text.indexOf('\u9677\u9631') !== -1 || text.indexOf('\u88C2\u96D9') !== -1 ||
         text.indexOf('\u8BFB\u6761') !== -1 || text.indexOf('\u6253\u65AD') !== -1) {
       return 'mech';
     }
-    // Heal
     if (text.indexOf('\u6CBB\u7597') !== -1 || text.indexOf('\u6062\u590D') !== -1 || text.indexOf('\u590D\u6D3B') !== -1) {
       return 'heal';
     }
-    // Damage
     if (text.indexOf('\u4F24\u5BB3') !== -1 || text.indexOf('\u547D\u4E2D') !== -1 || text.indexOf('\u706C\u70E7') !== -1 ||
         text.indexOf('\u653B\u51FB') !== -1 || text.indexOf('\u7206\u70B8') !== -1 || text.indexOf('\u9635\u4EA1') !== -1 ||
         text.indexOf('\u4F7F\u7528') !== -1) {
@@ -414,7 +509,7 @@ var GameWS = (function () {
     return 'system';
   }
 
-  /* ---- Battle log with time prefix ---- */
+  /* ---- Battle log ---- */
   var _logCount = 0;
   var _MAX_LOGS = 300;
   var _logEntries = [];
@@ -461,6 +556,9 @@ var GameWS = (function () {
       _logCount = 0;
     }
     _logEntries = [];
+    // Also clear AI log
+    var aiLog = document.getElementById('ai-log');
+    if (aiLog) aiLog.innerHTML = '';
   }
 
   function _rebuildLogForFilter(filter) {
@@ -514,9 +612,18 @@ var GameWS = (function () {
           if (msg.data.boss) {
             _updatePhaseBadge(msg.data.boss.phase);
             _updateHeaderBossHp(msg.data.boss);
-            _updateBossInfo(msg.data.boss);
           }
+          // Update boss card from boss_card data
+          if (msg.data.boss_card) {
+            _updateBossCard(msg.data.boss_card);
+          }
+          // Update player cards
           _updateCharCards(msg.data.characters);
+          // Update AI Log
+          if (msg.data.ai_log) {
+            _updateAiLog(msg.data.ai_log);
+          }
+          // Process combat logs
           var logs = msg.data.combat_log;
           if (logs && logs.length) {
             for (var i = 0; i < logs.length; i++) {
@@ -524,7 +631,6 @@ var GameWS = (function () {
               var logText = entry.text || entry.message || '';
               var logType = entry.type || null;
               if (logText) {
-                // Use server-provided type if available, otherwise classify
                 var finalType = (logType === 'ai_decision' || logType === 'ai_timeout')
                   ? logType
                   : _classifyLog(logText);
@@ -650,7 +756,31 @@ var GameWS = (function () {
     if (stopBtn) stopBtn.addEventListener('click', stopGame);
     if (restartBtn) restartBtn.addEventListener('click', restartGame);
 
-    // Log tab filtering
+    // Main log tab switching (BATTLE | AI)
+    var mainTabs = document.querySelectorAll('.log-main-tab');
+    for (var m = 0; m < mainTabs.length; m++) {
+      mainTabs[m].addEventListener('click', function () {
+        var panel = this.getAttribute('data-panel');
+        var allMainTabs = document.querySelectorAll('.log-main-tab');
+        for (var k = 0; k < allMainTabs.length; k++) {
+          allMainTabs[k].classList.remove('active');
+        }
+        this.classList.add('active');
+
+        // Toggle panels
+        var battlePanel = document.getElementById('battle-log-panel');
+        var aiPanel = document.getElementById('ai-log-panel');
+        if (panel === 'battle') {
+          if (battlePanel) battlePanel.classList.add('active');
+          if (aiPanel) aiPanel.classList.remove('active');
+        } else {
+          if (battlePanel) battlePanel.classList.remove('active');
+          if (aiPanel) aiPanel.classList.add('active');
+        }
+      });
+    }
+
+    // Battle log sub-tab filtering
     var tabs = document.querySelectorAll('.log-tab');
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener('click', function () {
@@ -665,19 +795,13 @@ var GameWS = (function () {
       });
     }
 
-    // Quick command buttons
+    // Tactical quick command buttons (send immediately)
     var quickBtns = document.querySelectorAll('.quick-btn');
     for (var q = 0; q < quickBtns.length; q++) {
       quickBtns[q].addEventListener('click', function () {
         var cmd = this.getAttribute('data-cmd');
-        var inp = document.getElementById('god-input');
-        if (inp) {
-          inp.value = cmd;
-          inp.focus();
-          if (cmd && cmd.charAt(cmd.length - 1) !== ' ') {
-            sendGodCommand(cmd);
-            inp.value = '';
-          }
+        if (cmd) {
+          sendGodCommand(cmd);
         }
       });
     }

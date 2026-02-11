@@ -1,4 +1,4 @@
-"""Boss: Ragnaros the Firelord - 3 phase encounter."""
+"""Boss: Ragnaros the Firelord - Agent-driven encounter."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ from typing import Any
 
 from game.character import Character, Debuff
 from game.events import (
-    BOSS_CAST, COMBAT_LOG, DAMAGE, DEATH, PHASE_CHANGE, SUMMON, EventBus,
+    COMBAT_LOG, DAMAGE, DEATH, PHASE_CHANGE, SUMMON, EventBus,
 )
+from game.skills import ROLE_SKILLS, SkillDef
+
+GCD_DURATION = 1.5
 
 
 class MoltenElemental:
@@ -17,10 +20,10 @@ class MoltenElemental:
     def __init__(self, add_id: str) -> None:
         self.id = add_id
         self.name = "熔岩元素"
-        self.max_hp = 3000
-        self.hp = 3000
+        self.max_hp = 4000
+        self.hp = 4000
         self.alive = True
-        self.attack_damage = 150
+        self.attack_damage = 200
         self.attack_cooldown = 2.0
         self.attack_timer = 0.0
         self.debuffs: list[Debuff] = []
@@ -68,50 +71,51 @@ class MoltenElemental:
 
 
 class Boss:
-    """Ragnaros the Firelord."""
+    """Ragnaros the Firelord - Character-compatible interface for Agent system."""
 
     def __init__(self, event_bus: EventBus) -> None:
         self.event_bus = event_bus
         self.id = "boss"
         self.name = "熔火之王拉格纳罗斯"
-        self.max_hp = 40000
-        self.hp = 40000
+        self.max_hp = 80000
+        self.hp = 80000
         self.alive = True
         self.phase = 1
 
         # Base stats (tuned for slow LLM response ~3-5s per agent)
-        self.base_attack_min = 150
-        self.base_attack_max = 280
-        self.attack_speed = 3.5  # seconds between auto attacks
+        self.base_attack_min = 350
+        self.base_attack_max = 550
+        self.attack_speed = 2.5  # seconds between auto attacks
 
-        # Timers (longer intervals = more time for agents to respond)
-        self.auto_attack_timer = 0.0
-        self.cleave_timer = 8.0
-        self.magma_timer = 12.0
-        self.firestorm_timer = 25.0
-        self.summon_timer = 35.0
-        self.fissure_timer = 20.0
-        self.apocalypse_timer = 20.0
-        self.trap_timer = 15.0
-        self.enrage_timer = 180.0  # P3 enrage
+        # --- Character-compatible interface ---
+        self.gcd: float = 0.0
+        self.cooldowns: dict[int, float] = {}
+        self.skills: list[SkillDef] = list(ROLE_SKILLS.get("boss", []))
+        self.last_action: dict | None = None
 
-        # Casting state
-        self.casting: dict[str, Any] | None = None  # {"name": str, "remaining": float, "effect": callable}
+        # Casting state (same format as Character)
+        self.casting: dict[str, Any] | None = None
+
+        # Initial cooldowns — ramp up boss aggression gradually
+        self.cooldowns[607] = 30.0  # 灭世之炎: first available ~30s (around P2)
+        self.cooldowns[605] = 15.0  # 召唤元素: first available ~15s
+        self.cooldowns[604] = 8.0   # 烈焰风暴: first available ~8s
 
         # Phase 2 adds
         self.adds: list[MoltenElemental] = []
 
-        # Phase 2/3 fissures: list of {"target_id": str, "duration": float, "damage_per_tick": int}
+        # Phase 2/3 fissures
         self.fissures: list[dict[str, Any]] = []
 
-        # Phase 3 traps: list of {"target_id": str, "countdown": float, "damage": int}
+        # Phase 3 traps
         self.traps: list[dict[str, Any]] = []
 
         # Debuffs on boss (from players)
         self.debuffs: list[Debuff] = []
 
-        # P3 enrage flag
+        # P3 enrage
         self.enraged = False
+        self.enrage_timer = 180.0
 
     # ------------------------------------------------------------------
     # Properties
@@ -150,7 +154,46 @@ class Boss:
         return speed
 
     # ------------------------------------------------------------------
-    # Take damage
+    # Character-compatible interface
+    # ------------------------------------------------------------------
+    def gcd_ready(self) -> bool:
+        return self.gcd <= 0 and not self.is_casting()
+
+    def is_on_gcd(self) -> bool:
+        return self.gcd > 0
+
+    def is_casting(self) -> bool:
+        return self.casting is not None
+
+    def can_use_skill(self, skill: SkillDef) -> tuple[bool, str]:
+        if not self.alive:
+            return False, "Boss已死亡"
+        if self.is_casting():
+            return False, "正在施法中"
+        if self.is_on_gcd():
+            return False, "全局冷却中"
+        if self.has_debuff("freeze"):
+            return False, "被冻结"
+        cd = self.cooldowns.get(skill.id, 0)
+        if cd > 0:
+            return False, f"技能冷却中({cd:.1f}s)"
+        return True, ""
+
+    def trigger_gcd(self) -> None:
+        self.gcd = GCD_DURATION
+
+    def set_cooldown(self, skill: SkillDef) -> None:
+        if skill.cooldown > 0:
+            self.cooldowns[skill.id] = skill.cooldown
+
+    def consume_mana(self, skill: SkillDef) -> None:
+        pass  # Boss has no resource
+
+    def start_cast(self, skill: SkillDef, target: str) -> None:
+        self.casting = {"skill": skill, "target": target, "remaining": skill.cast_time}
+
+    # ------------------------------------------------------------------
+    # Take damage / debuffs
     # ------------------------------------------------------------------
     def take_damage(self, amount: int) -> int:
         if not self.alive:
@@ -179,7 +222,6 @@ class Boss:
     # Phase management
     # ------------------------------------------------------------------
     def check_phase_transition(self) -> bool:
-        """Check and apply phase transitions. Returns True if phase changed."""
         old_phase = self.phase
         pct = self.hp_percent
         if pct <= 0.3 and self.phase < 3:
@@ -200,211 +242,73 @@ class Boss:
         self.event_bus.emit(COMBAT_LOG, {
             "message": f"[Phase 2] {self.name}进入狂怒阶段! 攻击力提升30%!",
         })
-        self.firestorm_timer = 8.0
-        self.summon_timer = 5.0
 
     def _enter_phase3(self) -> None:
         self.event_bus.emit(COMBAT_LOG, {
-            "message": f"[Phase 3] {self.name}进入灭世阶段! 攻击力+50%, 攻速+30%! 狂暴倒计时120秒!",
+            "message": f"[Phase 3] {self.name}进入灭世阶段! 攻击力+50%, 攻速+30%! 狂暴倒计时90秒!",
         })
-        self.apocalypse_timer = 10.0
-        self.trap_timer = 6.0
-        self.enrage_timer = 120.0
+        self.enrage_timer = 90.0
 
     # ------------------------------------------------------------------
-    # AI tick - returns list of actions to execute
+    # Timer ticking (called by engine each tick)
     # ------------------------------------------------------------------
-    def tick_ai(
-        self, dt: float, characters: list[Character], threat_top: str | None
-    ) -> list[dict[str, Any]]:
-        """Run boss AI for one tick. Returns list of actions taken."""
-        if not self.alive:
-            return []
+    def tick_timers(self, dt: float) -> list[str]:
+        """Advance GCD, cooldowns, debuffs. Returns expired debuff ids."""
+        expired: list[str] = []
 
-        actions: list[dict[str, Any]] = []
+        # GCD
+        if self.gcd > 0:
+            self.gcd = max(0, self.gcd - dt)
 
-        # If currently casting, advance cast
+        # Cooldowns
+        for sid in list(self.cooldowns):
+            self.cooldowns[sid] -= dt
+            if self.cooldowns[sid] <= 0:
+                del self.cooldowns[sid]
+
+        # Casting
         if self.casting:
             self.casting["remaining"] -= dt
-            if self.casting["remaining"] <= 0:
-                actions.append({"type": "cast_complete", "name": self.casting["name"]})
-                self.casting = None
-            else:
-                # While casting, skip other actions
-                return actions
 
-        # Check if frozen/stunned
-        if self.has_debuff("freeze"):
-            self._tick_debuff_timers(dt)
-            return actions
+        # Debuffs
+        remaining_debuffs: list[Debuff] = []
+        for d in self.debuffs:
+            if d.duration is not None and d.duration > 0:
+                d.duration -= dt
+                if d.duration <= 0:
+                    expired.append(f"debuff:{d.debuff_id}")
+                    continue
+            remaining_debuffs.append(d)
+        self.debuffs = remaining_debuffs
 
-        self._tick_debuff_timers(dt)
-        self._tick_fissures(dt, characters, actions)
-        self._tick_traps(dt, characters, actions)
-        self._tick_adds(dt, characters, actions)
-
-        # Decrease all timers
-        self.auto_attack_timer = max(0, self.auto_attack_timer - dt)
-        self.cleave_timer = max(0, self.cleave_timer - dt)
-        self.magma_timer = max(0, self.magma_timer - dt)
-
-        if self.phase >= 2:
-            self.firestorm_timer = max(0, self.firestorm_timer - dt)
-            self.summon_timer = max(0, self.summon_timer - dt)
-            self.fissure_timer = max(0, self.fissure_timer - dt)
-
-        if self.phase >= 3:
-            self.apocalypse_timer = max(0, self.apocalypse_timer - dt)
-            self.trap_timer = max(0, self.trap_timer - dt)
+        # Enrage timer (P3)
+        if self.phase >= 3 and not self.enraged:
             self.enrage_timer = max(0, self.enrage_timer - dt)
-            if self.enrage_timer <= 0 and not self.enraged:
+            if self.enrage_timer <= 0:
                 self.enraged = True
-                actions.append({"type": "enrage"})
                 self.event_bus.emit(COMBAT_LOG, {
                     "message": f"[狂暴] {self.name}进入狂暴状态! 攻击力翻倍!",
                 })
 
-        living = [c for c in characters if c.alive]
-        if not living:
-            return actions
-
-        # Priority: special abilities > cleave > auto attack
-        # Phase 3 abilities
-        if self.phase >= 3:
-            if self.apocalypse_timer <= 0:
-                actions.append(self._cast_apocalypse())
-                self.apocalypse_timer = 25.0
-                return actions
-
-            if self.trap_timer <= 0 and living:
-                target = random.choice(living)
-                actions.append(self._place_trap(target))
-                self.trap_timer = 12.0
-
-        # Phase 2 abilities
-        if self.phase >= 2:
-            if self.firestorm_timer <= 0:
-                actions.append(self._cast_firestorm(living))
-                self.firestorm_timer = 15.0
-
-            if self.summon_timer <= 0:
-                actions.append(self._summon_adds())
-                self.summon_timer = 25.0
-
-            if self.fissure_timer <= 0 and living:
-                target = random.choice(living)
-                actions.append(self._place_fissure(target))
-                self.fissure_timer = 12.0
-
-        # Phase 1+ abilities
-        if self.magma_timer <= 0 and living:
-            target = random.choice(living)
-            actions.append(self._cast_magma_blast(target))
-            self.magma_timer = 12.0
-
-        if self.cleave_timer <= 0 and threat_top:
-            actions.append(self._cast_cleave(threat_top))
-            self.cleave_timer = 8.0
-
-        if self.auto_attack_timer <= 0 and threat_top:
-            actions.append(self._auto_attack(threat_top))
-            self.auto_attack_timer = self.current_attack_speed
-
-        return actions
+        return expired
 
     # ------------------------------------------------------------------
-    # Boss abilities
+    # Passive mechanics (called by engine each tick)
     # ------------------------------------------------------------------
-    def _auto_attack(self, target_id: str) -> dict:
-        damage = random.randint(self.attack_min, self.attack_max)
-        return {"type": "auto_attack", "target": target_id, "damage": damage, "name": "普攻"}
+    def tick_passive(self, dt: float, characters: list[Character]) -> None:
+        """Tick fissures, traps, adds - passive mechanics independent of Agent."""
+        if not self.alive:
+            return
+        self._tick_fissures(dt, characters)
+        self._tick_traps(dt, characters)
+        self._tick_adds(dt, characters)
 
-    def _cast_cleave(self, target_id: str) -> dict:
-        self.event_bus.emit(BOSS_CAST, {"skill": "顺劈斩", "target": target_id})
-        return {"type": "cleave", "target": target_id, "damage": 450, "name": "顺劈斩"}
-
-    def _cast_magma_blast(self, target: Character) -> dict:
-        self.event_bus.emit(BOSS_CAST, {"skill": "岩浆喷射", "target": target.id})
-        return {
-            "type": "magma_blast",
-            "target": target.id,
-            "damage": 350,
-            "dot_damage": 60,
-            "dot_duration": 5,
-            "name": "岩浆喷射",
-        }
-
-    def _cast_firestorm(self, targets: list[Character]) -> dict:
-        self.event_bus.emit(BOSS_CAST, {"skill": "烈焰风暴"})
-        return {"type": "firestorm", "damage": 220, "name": "烈焰风暴"}
-
-    def _summon_adds(self) -> dict:
-        add_count = len(self.adds)
-        new_adds = []
-        for i in range(2):
-            add = MoltenElemental(f"add_{add_count + i}")
-            self.adds.append(add)
-            new_adds.append(add)
-        self.event_bus.emit(SUMMON, {
-            "boss": self.name, "summon": "熔岩元素", "count": 2,
-        })
-        return {"type": "summon", "adds": new_adds, "name": "召唤熔岩元素"}
-
-    def _place_fissure(self, target: Character) -> dict:
-        fissure = {
-            "target_id": target.id,
-            "duration": 6.0,
-            "damage_per_tick": 150,
-            "name": "熔岩裂隙",
-        }
-        self.fissures.append(fissure)
-        self.event_bus.emit(BOSS_CAST, {"skill": "熔岩裂隙", "target": target.id})
-        return {"type": "fissure", "target": target.id, "name": "熔岩裂隙"}
-
-    def _cast_apocalypse(self) -> dict:
-        """灭世之炎: 3s cast, 8000 damage to all. Must be interrupted."""
-        self.casting = {
-            "name": "灭世之炎",
-            "remaining": 3.0,
-        }
-        self.event_bus.emit(BOSS_CAST, {
-            "skill": "灭世之炎", "cast_time": 3.0,
-            "message": "灭世之炎正在读条! 必须打断!",
-        })
-        return {"type": "apocalypse_start", "cast_time": 3.0, "name": "灭世之炎"}
-
-    def _place_trap(self, target: Character) -> dict:
-        trap = {
-            "target_id": target.id,
-            "countdown": 5.0,
-            "damage": 1500,
-            "name": "熔岩陷阱",
-        }
-        self.traps.append(trap)
-        self.event_bus.emit(BOSS_CAST, {
-            "skill": "熔岩陷阱", "target": target.id,
-            "message": f"熔岩陷阱标记了{target.name}! 5秒后爆炸!",
-        })
-        return {"type": "trap", "target": target.id, "countdown": 5.0, "name": "熔岩陷阱"}
-
-    # ------------------------------------------------------------------
-    # Tick helpers
-    # ------------------------------------------------------------------
-    def _tick_debuff_timers(self, dt: float) -> None:
-        remaining = []
-        for d in self.debuffs:
-            d.duration -= dt
-            if d.duration > 0:
-                remaining.append(d)
-        self.debuffs = remaining
-
-    def _tick_fissures(self, dt: float, characters: list[Character], actions: list) -> None:
+    def _tick_fissures(self, dt: float, characters: list[Character]) -> None:
         remaining = []
         for f in self.fissures:
             f["duration"] -= dt
             if f["duration"] > 0:
                 remaining.append(f)
-                # Damage the targeted character each tick
                 for c in characters:
                     if c.id == f["target_id"] and c.alive:
                         dmg = int(f["damage_per_tick"] * dt)
@@ -418,14 +322,15 @@ class Boss:
                             self.event_bus.emit(DEATH, {"target": c.id, "source": f["name"]})
         self.fissures = remaining
 
-    def _tick_traps(self, dt: float, characters: list[Character], actions: list) -> None:
+    def _tick_traps(self, dt: float, characters: list[Character]) -> None:
         remaining = []
         for trap in self.traps:
             trap["countdown"] -= dt
             if trap["countdown"] <= 0:
-                # Explode - damage the target and nearby allies
+                # Single-target: only damage the marked target
+                target_id = trap.get("target_id", "")
                 for c in characters:
-                    if c.alive:
+                    if c.id == target_id and c.alive:
                         actual = c.take_damage(trap["damage"])
                         if actual > 0:
                             self.event_bus.emit(DAMAGE, {
@@ -434,14 +339,15 @@ class Boss:
                             })
                         if not c.alive:
                             self.event_bus.emit(DEATH, {"target": c.id, "source": trap["name"]})
-                self.event_bus.emit(COMBAT_LOG, {
-                    "message": f"熔岩陷阱爆炸! 对全体造成{trap['damage']}伤害!",
-                })
+                        self.event_bus.emit(COMBAT_LOG, {
+                            "message": f"熔岩陷阱在{c.name}脚下爆炸! 造成{trap['damage']}伤害!",
+                        })
+                        break
             else:
                 remaining.append(trap)
         self.traps = remaining
 
-    def _tick_adds(self, dt: float, characters: list[Character], actions: list) -> None:
+    def _tick_adds(self, dt: float, characters: list[Character]) -> None:
         for add in self.adds:
             if not add.alive:
                 continue
@@ -461,9 +367,25 @@ class Boss:
                         self.event_bus.emit(DEATH, {"target": target.id, "source": add.name})
 
     # ------------------------------------------------------------------
+    # Summon adds (called by engine when skill 605 executes)
+    # ------------------------------------------------------------------
+    def summon_adds(self, count: int = 2) -> list[MoltenElemental]:
+        add_offset = len(self.adds)
+        new_adds = []
+        for i in range(count):
+            add = MoltenElemental(f"add_{add_offset + i}")
+            self.adds.append(add)
+            new_adds.append(add)
+        self.event_bus.emit(SUMMON, {
+            "boss": self.name, "summon": "熔岩元素", "count": count,
+        })
+        return new_adds
+
+    # ------------------------------------------------------------------
     # Serialization
     # ------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
+        """Legacy format for backward compatibility."""
         return {
             "id": self.id,
             "name": self.name,
@@ -473,7 +395,7 @@ class Boss:
             "phase": self.phase,
             "alive": self.alive,
             "casting": {
-                "name": self.casting["name"],
+                "name": self.casting["skill"].name,
                 "remaining": round(self.casting["remaining"], 2),
             } if self.casting else None,
             "debuffs": [
@@ -491,4 +413,49 @@ class Boss:
             ],
             "enraged": self.enraged,
             "enrage_timer": round(self.enrage_timer, 1) if self.phase >= 3 else None,
+        }
+
+    def to_card_dict(self) -> dict[str, Any]:
+        """Return Character.to_dict()-compatible format for the 6-card UI."""
+        return {
+            "id": self.id,
+            "role": "boss",
+            "name": self.name,
+            "hp": self.hp,
+            "max_hp": self.max_hp,
+            "mana": 0,
+            "max_mana": 0,
+            "resource_name": "",
+            "alive": self.alive,
+            "gcd": round(self.gcd, 2),
+            "casting": {
+                "skill_name": self.casting["skill"].name,
+                "remaining": round(self.casting["remaining"], 2),
+                "target": self.casting["target"],
+            } if self.casting else None,
+            "cooldowns": {str(k): round(v, 2) for k, v in self.cooldowns.items()},
+            "buffs": [],
+            "debuffs": [
+                {"id": d.debuff_id, "name": d.name, "duration": round(d.duration, 2), "params": d.params}
+                for d in self.debuffs
+            ],
+            "skills": [
+                {"id": s.id, "name": s.name, "cooldown": s.cooldown, "mana_cost": s.mana_cost,
+                 "cast_time": s.cast_time, "description": s.description, "auto": s.auto}
+                for s in self.skills
+            ],
+            "last_action": self.last_action,
+            # Boss-specific badges
+            "phase": self.phase,
+            "adds_count": len([a for a in self.adds if a.alive]),
+            "enraged": self.enraged,
+            "enrage_timer": round(self.enrage_timer, 1) if self.phase >= 3 else None,
+            "fissures": [
+                {"target": f["target_id"], "duration": round(f["duration"], 2)}
+                for f in self.fissures
+            ],
+            "traps": [
+                {"target": t["target_id"], "countdown": round(t["countdown"], 2)}
+                for t in self.traps
+            ],
         }

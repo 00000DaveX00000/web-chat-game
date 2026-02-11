@@ -288,7 +288,8 @@ class CombatSystem:
 
         # Interrupt casting
         if hasattr(target, "casting") and target.casting is not None:
-            interrupted_skill = target.casting.get("skill_name", target.casting.get("name", ""))
+            cast_skill = target.casting.get("skill")
+            interrupted_skill = getattr(cast_skill, "name", "") if cast_skill else target.casting.get("skill_name", "")
             target.casting = None
             self.event_bus.emit(COMBAT_LOG, {
                 "message": f"{caster.name}打断了{getattr(target, 'name', 'Boss')}的{interrupted_skill}",

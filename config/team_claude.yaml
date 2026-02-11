@@ -9,6 +9,11 @@ llm_defaults:
   timeout: 10.0
 
 members:
+  boss:
+    name: "拉格纳罗斯"
+    role: boss
+    llm_interval: 4.0
+
   tank:
     name: "圣骑士·克劳德"
     role: tank

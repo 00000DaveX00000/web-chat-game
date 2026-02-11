@@ -1,4 +1,4 @@
-"""Skill data definitions for all character classes."""
+"""Skill data definitions for all character classes and Boss."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 class SkillDef:
     id: int
     name: str
-    role: str  # tank / healer / mage / rogue / hunter
+    role: str  # tank / healer / mage / rogue / hunter / boss
     cooldown: float  # seconds
     mana_cost: int
     cast_time: float  # 0 = instant
@@ -18,6 +18,8 @@ class SkillDef:
     description: str = ""
     # effect parameters stored as a flat dict
     effects: dict[str, Any] = field(default_factory=dict)
+    # auto skills are cast by the auto loop, not LLM
+    auto: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +71,7 @@ HEROIC_STRIKE = SkillDef(
     target_type="enemy",
     description="造成350伤害",
     effects={"type": "damage", "base_damage": 350},
+    auto=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -84,6 +87,7 @@ HEAL = SkillDef(
     target_type="ally",
     description="单体治疗800HP",
     effects={"type": "heal", "base_heal": 800},
+    auto=True,
 )
 
 CIRCLE_OF_HEAL = SkillDef(
@@ -135,6 +139,7 @@ FIREBALL = SkillDef(
     target_type="enemy",
     description="造成500伤害",
     effects={"type": "damage", "base_damage": 500},
+    auto=True,
 )
 
 BLIZZARD = SkillDef(
@@ -186,6 +191,7 @@ BACKSTAB = SkillDef(
     target_type="enemy",
     description="造成450伤害",
     effects={"type": "damage", "base_damage": 450},
+    auto=True,
 )
 
 POISON_BLADE = SkillDef(
@@ -237,6 +243,7 @@ AIMED_SHOT = SkillDef(
     target_type="enemy",
     description="造成420伤害",
     effects={"type": "damage", "base_damage": 420},
+    auto=True,
 )
 
 MULTI_SHOT = SkillDef(
@@ -276,6 +283,107 @@ HEALING_WIND = SkillDef(
 )
 
 # ---------------------------------------------------------------------------
+# Boss skills
+# ---------------------------------------------------------------------------
+BOSS_AUTO_ATTACK = SkillDef(
+    id=601,
+    name="普攻",
+    role="boss",
+    cooldown=3.5,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy",
+    description="造成200-400伤害",
+    effects={"type": "boss_attack"},
+    auto=True,
+)
+
+BOSS_CLEAVE = SkillDef(
+    id=602,
+    name="顺劈斩",
+    role="boss",
+    cooldown=6.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy",
+    description="造成700伤害",
+    effects={"type": "boss_attack", "base_damage": 700},
+    auto=True,
+)
+
+BOSS_MAGMA_BLAST = SkillDef(
+    id=603,
+    name="岩浆喷射",
+    role="boss",
+    cooldown=10.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy",
+    description="造成450伤害并附加100/s灼烧DOT持续5秒",
+    effects={"type": "boss_magma", "base_damage": 450, "dot_damage": 100, "dot_duration": 5},
+)
+
+BOSS_FIRESTORM = SkillDef(
+    id=604,
+    name="烈焰风暴",
+    role="boss",
+    cooldown=12.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy_all",
+    description="对全体造成400伤害",
+    effects={"type": "boss_aoe", "base_damage": 400},
+)
+
+BOSS_SUMMON = SkillDef(
+    id=605,
+    name="召唤元素",
+    role="boss",
+    cooldown=20.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="self",
+    description="召唤2个熔岩元素小怪",
+    effects={"type": "boss_summon", "count": 2},
+)
+
+BOSS_FISSURE = SkillDef(
+    id=606,
+    name="熔岩裂隙",
+    role="boss",
+    cooldown=10.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy",
+    description="在目标脚下制造裂隙,200/s DOT持续6秒",
+    effects={"type": "boss_fissure", "dot_damage": 200, "dot_duration": 6},
+)
+
+BOSS_APOCALYPSE = SkillDef(
+    id=607,
+    name="灭世之炎",
+    role="boss",
+    cooldown=20.0,
+    mana_cost=0,
+    cast_time=3.0,
+    target_type="enemy_all",
+    description="3秒读条,对全体造成8000伤害(可打断)",
+    effects={"type": "boss_apocalypse", "base_damage": 8000},
+)
+
+BOSS_TRAP = SkillDef(
+    id=608,
+    name="熔岩陷阱",
+    role="boss",
+    cooldown=10.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy",
+    description="标记目标,5秒后爆炸造成2000伤害",
+    effects={"type": "boss_trap", "damage": 2000, "countdown": 5.0},
+)
+
+# ---------------------------------------------------------------------------
 # Skill registry
 # ---------------------------------------------------------------------------
 ALL_SKILLS: list[SkillDef] = [
@@ -284,6 +392,8 @@ ALL_SKILLS: list[SkillDef] = [
     FIREBALL, BLIZZARD, FROST_NOVA, SPELL_BARRIER,
     BACKSTAB, POISON_BLADE, EVASION, DEADLY_COMBO,
     AIMED_SHOT, MULTI_SHOT, HUNTERS_MARK, HEALING_WIND,
+    BOSS_AUTO_ATTACK, BOSS_CLEAVE, BOSS_MAGMA_BLAST, BOSS_FIRESTORM,
+    BOSS_SUMMON, BOSS_FISSURE, BOSS_APOCALYPSE, BOSS_TRAP,
 ]
 
 SKILLS: dict[int, SkillDef] = {s.id: s for s in ALL_SKILLS}
@@ -295,3 +405,13 @@ for _s in ALL_SKILLS:
 
 def get_skill(skill_id: int) -> SkillDef | None:
     return SKILLS.get(skill_id)
+
+
+def get_auto_skills(role: str) -> list[SkillDef]:
+    """Return auto skills for a role."""
+    return [s for s in ROLE_SKILLS.get(role, []) if s.auto]
+
+
+def get_llm_skills(role: str) -> list[SkillDef]:
+    """Return LLM-controlled skills for a role (non-auto)."""
+    return [s for s in ROLE_SKILLS.get(role, []) if not s.auto]

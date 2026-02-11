@@ -34,40 +34,63 @@
         <div id="game-container"></div>
       </div>
       <div id="info-column">
-        <!-- Boss Info Panel -->
-        <div id="boss-info">
-          <div id="boss-info-name">BOSS</div>
-          <div id="boss-hp-bar-wrap">
-            <div id="boss-hp-bar-fill"></div>
-            <span id="boss-hp-text">100%</span>
-          </div>
-          <div id="boss-phase-text">Phase 1</div>
-          <div id="boss-cast-bar" class="hidden">
-            <span id="boss-cast-name"></span>
-            <div id="boss-cast-fill"></div>
-            <span id="boss-cast-time"></span>
-          </div>
-          <div id="boss-mechanics"></div>
-          <div id="boss-debuffs"></div>
-          <div id="boss-enrage" class="hidden"></div>
+        <!-- Log Tabs: BATTLE | AI -->
+        <div id="log-tab-bar">
+          <button class="log-main-tab active" data-panel="battle">BATTLE LOG</button>
+          <button class="log-main-tab" data-panel="ai">AI LOG</button>
         </div>
-        <!-- Battle Log -->
-        <div id="battle-log-container">
+        <!-- Battle Log Panel -->
+        <div id="battle-log-panel" class="log-panel active">
           <div id="log-tabs">
             <button class="log-tab active" data-filter="all">ALL</button>
             <button class="log-tab" data-filter="damage">DMG</button>
             <button class="log-tab" data-filter="heal">HEAL</button>
             <button class="log-tab" data-filter="mech">MECH</button>
-            <button class="log-tab" data-filter="cmd">指令</button>
-            <button class="log-tab" data-filter="ai_decision">AI响应</button>
+            <button class="log-tab" data-filter="cmd">CMD</button>
+            <button class="log-tab" data-filter="ai_decision">AI</button>
           </div>
           <div id="battle-log"></div>
+        </div>
+        <!-- AI Log Panel -->
+        <div id="ai-log-panel" class="log-panel">
+          <div id="ai-log"></div>
         </div>
       </div>
     </div>
 
-    <!-- Character Strip (WoW-style) -->
+    <!-- Character Strip (6 cards: Boss + 5 players) -->
     <div id="char-strip">
+      <!-- Boss Card -->
+      <div class="char-card boss-card" data-role="boss" id="card-boss">
+        <div class="card-header">
+          <span class="card-icon"></span>
+          <span class="card-name"></span>
+          <span class="source-tag waiting"></span>
+        </div>
+        <div class="card-bars">
+          <div class="bar-row hp-row">
+            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="bar-text hp-text"></span>
+          </div>
+          <div class="bar-row mp-row boss-phase-row">
+            <span class="boss-badges"></span>
+          </div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="skill-bar">
+          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        </div>
+        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
+        <div class="card-divider"></div>
+        <div class="card-action"></div>
+        <div class="card-reason"></div>
+        <div class="card-buffs"></div>
+      </div>
+
+      <!-- Tank Card -->
       <div class="char-card" data-role="tank" id="card-tank">
         <div class="card-header">
           <span class="card-icon"></span>
@@ -99,6 +122,7 @@
         <div class="card-buffs"></div>
       </div>
 
+      <!-- Healer Card -->
       <div class="char-card" data-role="healer" id="card-healer">
         <div class="card-header">
           <span class="card-icon"></span>
@@ -130,6 +154,7 @@
         <div class="card-buffs"></div>
       </div>
 
+      <!-- Mage Card -->
       <div class="char-card" data-role="mage" id="card-mage">
         <div class="card-header">
           <span class="card-icon"></span>
@@ -161,6 +186,7 @@
         <div class="card-buffs"></div>
       </div>
 
+      <!-- Rogue Card -->
       <div class="char-card" data-role="rogue" id="card-rogue">
         <div class="card-header">
           <span class="card-icon"></span>
@@ -192,6 +218,7 @@
         <div class="card-buffs"></div>
       </div>
 
+      <!-- Hunter Card -->
       <div class="char-card" data-role="hunter" id="card-hunter">
         <div class="card-header">
           <span class="card-icon"></span>
@@ -227,31 +254,29 @@
     <!-- Command Bar -->
     <div id="cmd-bar">
       <div id="cmd-quick">
-        <button class="quick-btn" data-cmd="say ">SAY</button>
-        <button class="quick-btn" data-cmd="damage boss 5000">DMG</button>
-        <button class="quick-btn" data-cmd="heal tank 3000">HEAL</button>
-        <button class="quick-btn" data-cmd="kill boss">KILL</button>
-        <button class="quick-btn" data-cmd="resurrect tank">REZ</button>
-        <button class="quick-btn" data-cmd="phase 2">PHASE</button>
-        <button class="quick-btn" data-cmd="buff tank shield_wall 30">BUFF</button>
+        <button class="quick-btn tactical" data-cmd="打断!">INTERRUPT</button>
+        <button class="quick-btn tactical" data-cmd="开盾墙!">SHIELD</button>
+        <button class="quick-btn tactical" data-cmd="群疗!">AOE HEAL</button>
+        <button class="quick-btn tactical" data-cmd="嘲讽!">TAUNT</button>
+        <button class="quick-btn tactical" data-cmd="集火boss!">FOCUS</button>
+        <button class="quick-btn tactical" data-cmd="清小怪!">CLEAR ADDS</button>
       </div>
       <div id="cmd-input-wrap">
         <span id="cmd-prompt">&gt;</span>
-        <input id="god-input" type="text" placeholder="输入上帝指令 (自然语言也OK)..." autocomplete="off">
+        <input id="god-input" type="text" placeholder="输入战术指令 (自然语言)..." autocomplete="off">
         <button id="god-send">SEND</button>
       </div>
       <button id="cmd-help-btn" title="命令帮助">?</button>
       <div id="cmd-help-panel" class="hidden">
-        <div class="help-title">命令参考</div>
-        <div class="help-row"><b>say &lt;msg&gt;</b> 发送消息</div>
-        <div class="help-row"><b>damage &lt;target&gt; &lt;amt&gt;</b> 造成伤害</div>
-        <div class="help-row"><b>heal &lt;target&gt; &lt;amt&gt;</b> 治疗</div>
-        <div class="help-row"><b>kill &lt;target&gt;</b> 击杀</div>
-        <div class="help-row"><b>resurrect &lt;target&gt;</b> 复活</div>
-        <div class="help-row"><b>phase &lt;1|2|3&gt;</b> 切换阶段</div>
-        <div class="help-row"><b>buff &lt;target&gt; &lt;id&gt; [dur]</b> 添加增益</div>
-        <div class="help-row"><b>进攻/集火/注意治疗</b> 自然语言广播给AI</div>
-        <div class="help-row">target: tank|healer|mage|rogue|hunter|boss</div>
+        <div class="help-title">战术指令参考</div>
+        <div class="help-row"><b>打断!</b> 法师冰冻打断Boss读条</div>
+        <div class="help-row"><b>开盾墙!</b> 坦克开启50%减伤</div>
+        <div class="help-row"><b>群疗!</b> 治疗释放全团治疗</div>
+        <div class="help-row"><b>嘲讽!</b> 坦克强制Boss攻击自己</div>
+        <div class="help-row"><b>集火boss!</b> 全DPS集中输出Boss</div>
+        <div class="help-row"><b>清小怪!</b> DPS优先清理小怪</div>
+        <div class="help-row"><b>驱散!</b> 治疗驱散负面效果</div>
+        <div class="help-row">或直接输入自然语言战术广播给所有AI</div>
       </div>
     </div>
   </div>

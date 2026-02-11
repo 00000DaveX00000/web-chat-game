@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from typing import Any, Callable
 
@@ -11,7 +12,7 @@ from game.boss import Boss
 from game.character import Character, Debuff, create_character
 from game.combat import CombatSystem
 from game.events import (
-    COMBAT_LOG, DAMAGE, DEATH, DEFEAT, VICTORY, EventBus,
+    BOSS_CAST, COMBAT_LOG, DAMAGE, DEATH, DEFEAT, VICTORY, EventBus,
 )
 from game.skills import SKILLS, get_skill
 
@@ -42,6 +43,7 @@ class GameEngine:
         self._god_commands: list[str] = []
         # Latest god command text (for agent prompts)
         self.god_command_text: str = ""
+        self._god_command_time: float = 0.0  # game_time when set
 
         # Game state
         self.running = False
@@ -56,9 +58,33 @@ class GameEngine:
         # Log index for incremental fetching
         self._last_log_index = 0
 
+        # Agent references for AI Log
+        self._agents: list[Any] = []
+
     @property
     def is_running(self) -> bool:
         return self.running
+
+    # ------------------------------------------------------------------
+    # Agent injection (for AI Log)
+    # ------------------------------------------------------------------
+    def set_agents(self, agents: list[Any]) -> None:
+        """Store agent references for AI Log collection."""
+        self._agents = agents
+
+    def _get_ai_log(self) -> list[dict[str, Any]]:
+        """Collect last_query/last_response from all agents."""
+        logs = []
+        for agent in self._agents:
+            logs.append({
+                "id": agent.character_id,
+                "name": agent.name,
+                "role": agent.role,
+                "is_boss": getattr(agent, "is_boss", False),
+                "last_query": getattr(agent, "last_query", ""),
+                "last_response": getattr(agent, "last_response", None),
+            })
+        return logs
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -144,25 +170,27 @@ class GameEngine:
         self.tick_count += 1
         self.game_time += dt
 
-        # 1. Process timers (GCD, cooldowns, buff/debuff durations)
+        # 1. Process timers (GCD, cooldowns, buff/debuff durations) - characters + boss
         self._tick_timers(dt)
 
-        # 2. Process DOTs and HOTs
+        # 2. Process boss passive mechanics (fissures, traps, adds)
+        self._process_boss_passive(dt)
+
+        # 3. Process DOTs and HOTs
         self.combat.process_dots(list(self.characters.values()), self.boss, dt)
 
-        # 3. Process casting completions
+        # 4. Process casting completions (characters + boss)
         self._process_casts(dt)
-
-        # 4. Boss AI
-        self._process_boss_ai(dt)
 
         # 5. Check phase transitions
         self.boss.check_phase_transition()
 
-        # 6. Process god commands
+        # 6. Process god commands (+ expire old commands after 15s)
         self._process_god_commands()
+        if self.god_command_text and self.game_time - self._god_command_time > 15.0:
+            self.god_command_text = ""
 
-        # 7. Collect and resolve player actions
+        # 7. Collect and resolve all pending actions (characters + boss unified)
         self._process_pending_actions()
 
         # 8. Threat table tick
@@ -171,27 +199,29 @@ class GameEngine:
         # 9. Check win/lose conditions
         self._check_end_conditions()
 
-        # 10. Broadcast state
+        # 10. Broadcast state (includes AI Log)
         self._broadcast_state()
 
     # ------------------------------------------------------------------
     # Agent interface
     # ------------------------------------------------------------------
     def submit_action(self, character_id: str, skill_id: int, target: str = "") -> bool:
-        """Submit a player action. Returns True if accepted into queue."""
-        char = self.characters.get(character_id)
-        if not char:
+        """Submit a player or boss action. Returns True if accepted into queue."""
+        # Get entity (character or boss)
+        if character_id == "boss":
+            entity = self.boss
+        else:
+            entity = self.characters.get(character_id)
+
+        if not entity:
             return False
 
         skill = get_skill(skill_id)
         if not skill:
             return False
 
-        can_use, reason = char.can_use_skill(skill)
+        can_use, reason = entity.can_use_skill(skill)
         if not can_use:
-            self.event_bus.emit(COMBAT_LOG, {
-                "message": f"[{char.name}] 无法使用{skill.name}: {reason}",
-            })
             return False
 
         self._pending_actions.append((character_id, skill_id, target))
@@ -201,16 +231,13 @@ class GameEngine:
         """Submit a god/DM command."""
         self._god_commands.append(command)
         self.god_command_text = command
+        self._god_command_time = self.game_time
 
     def get_character(self, character_id: str) -> Character | None:
         return self.characters.get(character_id)
 
     def get_game_state(self) -> dict[str, Any]:
-        """Return game state snapshot with incremental combat log.
-
-        Only call from _broadcast_state (once per tick) so the log index
-        advances exactly once.  Agents should use get_state_for_agent().
-        """
+        """Return game state snapshot with incremental combat log."""
         new_logs = self.event_bus.get_log(self._last_log_index)
         self._last_log_index = len(self.event_bus._log)
 
@@ -222,12 +249,14 @@ class GameEngine:
             "running": self.running,
             "result": self.result,
             "boss": self.boss.to_dict(),
+            "boss_card": self.boss.to_card_dict(),
             "characters": {cid: c.to_dict() for cid, c in self.characters.items()},
             "threat": self.combat.threat.get_threat_list(),
             "adds": [a.to_dict() for a in self.boss.adds if a.alive],
             "living_count": len(living),
             "combat_log": new_logs,
             "god_command": self.god_command_text,
+            "ai_log": self._get_ai_log(),
         }
 
     def get_state_for_agent(self) -> dict[str, Any]:
@@ -240,6 +269,7 @@ class GameEngine:
             "running": self.running,
             "result": self.result,
             "boss": self.boss.to_dict(),
+            "boss_card": self.boss.to_card_dict(),
             "characters": {cid: c.to_dict() for cid, c in self.characters.items()},
             "threat": self.combat.threat.get_threat_list(),
             "adds": [a.to_dict() for a in self.boss.adds if a.alive],
@@ -257,12 +287,14 @@ class GameEngine:
             "running": self.running,
             "result": self.result,
             "boss": self.boss.to_dict(),
+            "boss_card": self.boss.to_card_dict(),
             "characters": {cid: c.to_dict() for cid, c in self.characters.items()},
             "threat": self.combat.threat.get_threat_list(),
             "adds": [a.to_dict() for a in self.boss.adds if a.alive],
             "living_count": len(living),
             "combat_log": self.event_bus.get_log(),
             "god_command": self.god_command_text,
+            "ai_log": self._get_ai_log(),
         }
 
     def register_state_callback(self, cb: Callable[[dict], None]) -> None:
@@ -278,7 +310,8 @@ class GameEngine:
     # Internal processing
     # ------------------------------------------------------------------
     def _tick_timers(self, dt: float) -> None:
-        """Advance character timers."""
+        """Advance character and boss timers."""
+        # Character timers
         for char in self.characters.values():
             expired = char.tick_timers(dt)
             for exp in expired:
@@ -287,9 +320,22 @@ class GameEngine:
                     "buff_expire",
                     {"target": char.id, f"{kind}_id": bid, "reason": "expired"},
                 )
+        # Boss timers
+        boss_expired = self.boss.tick_timers(dt)
+        for exp in boss_expired:
+            kind, bid = exp.split(":", 1)
+            self.event_bus.emit(
+                "buff_expire",
+                {"target": "boss", f"{kind}_id": bid, "reason": "expired"},
+            )
+
+    def _process_boss_passive(self, dt: float) -> None:
+        """Tick boss passive mechanics (fissures, traps, adds)."""
+        self.boss.tick_passive(dt, list(self.characters.values()))
 
     def _process_casts(self, dt: float) -> None:
-        """Check if any character finished casting."""
+        """Check if any character or boss finished casting."""
+        # Character casts
         for char in self.characters.values():
             if not char.casting:
                 continue
@@ -299,108 +345,61 @@ class GameEngine:
                 char.casting = None
                 self._execute_skill(char, skill, target_id)
 
-    def _process_boss_ai(self, dt: float) -> None:
-        """Run boss AI and resolve its actions."""
-        alive_ids = {c.id for c in self.characters.values() if c.alive}
-        threat_top = self.combat.threat.get_top_threat(alive_ids)
-        actions = self.boss.tick_ai(dt, list(self.characters.values()), threat_top)
-
-        for action in actions:
-            self._resolve_boss_action(action)
-
-    def _resolve_boss_action(self, action: dict) -> None:
-        atype = action.get("type", "")
-        target_id = action.get("target", "")
-        target = self.characters.get(target_id)
-        living = [c for c in self.characters.values() if c.alive]
-
-        if atype == "auto_attack":
-            if target and target.alive:
-                self.combat.boss_attack(self.boss, target, action["damage"], action.get("name", "普攻"))
-
-        elif atype == "cleave":
-            if target and target.alive:
-                self.combat.boss_attack(self.boss, target, action["damage"], action["name"])
-
-        elif atype == "magma_blast":
-            if target and target.alive:
-                self.combat.boss_attack(self.boss, target, action["damage"], action["name"])
-                # Apply burn DOT
-                dot = Debuff(
-                    debuff_id="magma_burn",
-                    name="岩浆灼烧",
-                    duration=action["dot_duration"],
-                    params={"damage_per_tick": action["dot_damage"], "source": "boss"},
-                    source="boss",
-                )
-                target.add_debuff(dot)
-                self.event_bus.emit(COMBAT_LOG, {
-                    "message": f"岩浆喷射命中{target.name}! 灼烧DOT {action['dot_damage']}/s 持续{action['dot_duration']}秒",
-                })
-
-        elif atype == "firestorm":
-            self.combat.boss_aoe_attack(self.boss, living, action["damage"], action["name"])
-            self.event_bus.emit(COMBAT_LOG, {
-                "message": f"烈焰风暴! 全体受到{action['damage']}伤害!",
-            })
-
-        elif atype == "summon":
-            self.event_bus.emit(COMBAT_LOG, {
-                "message": "拉格纳罗斯召唤了2个熔岩元素!",
-            })
-
-        elif atype == "apocalypse_start":
-            self.event_bus.emit(COMBAT_LOG, {
-                "message": "!! 灭世之炎读条开始(3秒)! 必须打断 !!",
-            })
-
-        elif atype == "cast_complete":
-            if action.get("name") == "灭世之炎":
-                # Wipe if not interrupted
-                self.combat.boss_aoe_attack(self.boss, living, 8000, "灭世之炎")
-                self.event_bus.emit(COMBAT_LOG, {
-                    "message": "灭世之炎释放! 全体受到8000伤害!",
-                })
-
-        elif atype == "enrage":
-            pass  # Already handled in boss.tick_ai
+        # Boss casts
+        if self.boss.casting and self.boss.casting["remaining"] <= 0:
+            skill = self.boss.casting["skill"]
+            target_id = self.boss.casting["target"]
+            self.boss.casting = None
+            self._execute_boss_skill(skill, target_id)
 
     def _process_pending_actions(self) -> None:
-        """Resolve all queued player actions."""
+        """Resolve all queued actions (characters + boss unified)."""
         actions = list(self._pending_actions)
         self._pending_actions.clear()
 
         for char_id, skill_id, target_id in actions:
-            char = self.characters.get(char_id)
+            # Get entity
+            if char_id == "boss":
+                entity = self.boss
+            else:
+                entity = self.characters.get(char_id)
             skill = get_skill(skill_id)
-            if not char or not skill:
+            if not entity or not skill:
                 continue
 
             # Re-check usability (state may have changed)
-            can_use, reason = char.can_use_skill(skill)
+            can_use, reason = entity.can_use_skill(skill)
             if not can_use:
                 continue
 
             # Consume resources
-            # For deadly combo, save energy before consuming
             if skill.id == 404:
-                char._deadly_combo_energy = char.mana
+                entity._deadly_combo_energy = entity.mana
 
-            char.consume_mana(skill)
-            char.trigger_gcd()
-            char.set_cooldown(skill)
+            entity.consume_mana(skill)
+            entity.trigger_gcd()
+            entity.set_cooldown(skill)
 
             # If skill has a cast time, start casting
             if skill.cast_time > 0:
-                char.start_cast(skill, target_id)
+                entity.start_cast(skill, target_id)
+                entity_name = getattr(entity, "name", char_id)
                 self.event_bus.emit(COMBAT_LOG, {
-                    "message": f"[{char.name}] 开始施放 {skill.name}...",
+                    "message": f"[{entity_name}] 开始施放 {skill.name}...",
                 })
+                if char_id == "boss":
+                    self.event_bus.emit(BOSS_CAST, {
+                        "skill": skill.name, "cast_time": skill.cast_time,
+                        "message": f"{skill.name}正在读条! {'必须打断!' if skill.id == 607 else ''}",
+                    })
             else:
-                self._execute_skill(char, skill, target_id)
+                if char_id == "boss":
+                    self._execute_boss_skill(skill, target_id)
+                else:
+                    self._execute_skill(entity, skill, target_id)
 
     def _execute_skill(self, char: Character, skill, target_id: str) -> None:
-        """Execute a resolved skill."""
+        """Execute a resolved player skill."""
         # Determine target
         target = None
         all_allies = [c for c in self.characters.values() if c.alive]
@@ -455,6 +454,88 @@ class GameEngine:
             "message": f"[{char.name}] 使用 {skill.name} \u2192 {target_name}{detail}",
         })
 
+    def _execute_boss_skill(self, skill, target_id: str) -> None:
+        """Execute a boss skill."""
+        living = [c for c in self.characters.values() if c.alive]
+        target = self.characters.get(target_id)
+
+        if skill.id == 601:  # 普攻
+            if target and target.alive:
+                damage = random.randint(self.boss.attack_min, self.boss.attack_max)
+                self.combat.boss_attack(self.boss, target, damage, "普攻")
+
+        elif skill.id == 602:  # 顺劈斩
+            if target and target.alive:
+                dmg = skill.effects.get("base_damage", 700)
+                self.combat.boss_attack(self.boss, target, dmg, "顺劈斩")
+
+        elif skill.id == 603:  # 岩浆喷射
+            if target and target.alive:
+                dmg = skill.effects.get("base_damage", 450)
+                self.combat.boss_attack(self.boss, target, dmg, "岩浆喷射")
+                dot = Debuff(
+                    debuff_id="magma_burn",
+                    name="岩浆灼烧",
+                    duration=skill.effects.get("dot_duration", 5),
+                    params={"damage_per_tick": skill.effects.get("dot_damage", 60), "source": "boss"},
+                    source="boss",
+                )
+                target.add_debuff(dot)
+                self.event_bus.emit(COMBAT_LOG, {
+                    "message": f"岩浆喷射命中{target.name}! 灼烧DOT {skill.effects.get('dot_damage', 60)}/s",
+                })
+
+        elif skill.id == 604:  # 烈焰风暴
+            aoe_dmg = skill.effects.get("base_damage", 400)
+            self.combat.boss_aoe_attack(self.boss, living, aoe_dmg, "烈焰风暴")
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"烈焰风暴! 全体受到{aoe_dmg}伤害!",
+            })
+
+        elif skill.id == 605:  # 召唤元素
+            self.boss.summon_adds(skill.effects.get("count", 2))
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": "拉格纳罗斯召唤了2个熔岩元素!",
+            })
+
+        elif skill.id == 606:  # 熔岩裂隙
+            if target and target.alive:
+                fissure = {
+                    "target_id": target.id,
+                    "duration": skill.effects.get("dot_duration", 6.0),
+                    "damage_per_tick": skill.effects.get("dot_damage", 150),
+                    "name": "熔岩裂隙",
+                }
+                self.boss.fissures.append(fissure)
+                self.event_bus.emit(BOSS_CAST, {"skill": "熔岩裂隙", "target": target.id})
+                self.event_bus.emit(COMBAT_LOG, {
+                    "message": f"熔岩裂隙出现在{target.name}脚下!",
+                })
+
+        elif skill.id == 607:  # 灭世之炎 (cast completed)
+            apoc_dmg = skill.effects.get("base_damage", 8000)
+            self.combat.boss_aoe_attack(self.boss, living, apoc_dmg, "灭世之炎")
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"灭世之炎释放! 全体受到{apoc_dmg}伤害!",
+            })
+
+        elif skill.id == 608:  # 熔岩陷阱
+            if target and target.alive:
+                trap = {
+                    "target_id": target.id,
+                    "countdown": skill.effects.get("countdown", 5.0),
+                    "damage": skill.effects.get("damage", 1500),
+                    "name": "熔岩陷阱",
+                }
+                self.boss.traps.append(trap)
+                self.event_bus.emit(BOSS_CAST, {
+                    "skill": "熔岩陷阱", "target": target.id,
+                    "message": f"熔岩陷阱标记了{target.name}! 5秒后爆炸!",
+                })
+                self.event_bus.emit(COMBAT_LOG, {
+                    "message": f"熔岩陷阱标记了{target.name}! 5秒后爆炸!",
+                })
+
     def _process_god_commands(self) -> None:
         """Process DM/God commands."""
         commands = list(self._god_commands)
@@ -472,7 +553,6 @@ class GameEngine:
         cmd = parts[0].lower()
 
         if cmd == "damage" and len(parts) >= 3:
-            # damage <target> <amount>
             target_id = parts[1]
             amount = int(parts[2])
             target = self.characters.get(target_id)
@@ -544,7 +624,6 @@ class GameEngine:
             self.event_bus.emit(COMBAT_LOG, {"message": "[God] 游戏暂停"})
 
         elif cmd == "resume":
-            # Will be called to restart the loop externally
             self.event_bus.emit(COMBAT_LOG, {"message": "[God] 游戏恢复"})
 
         else:

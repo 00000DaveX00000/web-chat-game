@@ -64,8 +64,7 @@ async def main() -> None:
     # Create agents from team config
     llm_defaults = team_config.get("llm_defaults", {})
 
-    # Resolve API key: check ANTHROPIC_AUTH_TOKEN first (compatible APIs),
-    # then the key specified in config, then ANTHROPIC_API_KEY
+    # Resolve API key
     api_key = (
         os.getenv("ANTHROPIC_AUTH_TOKEN")
         or os.getenv(llm_defaults.get("api_key_env", "ANTHROPIC_API_KEY"))
@@ -83,9 +82,13 @@ async def main() -> None:
     llm_semaphore = asyncio.Semaphore(3)
 
     agents: list[BaseAgent] = []
-    for idx, (role, member_config) in enumerate(team_config.get("members", {}).items()):
+    all_members = team_config.get("members", {})
+
+    for idx, (role, member_config) in enumerate(all_members.items()):
         # Map "ranger" to "hunter" for compatibility
         actual_role = "hunter" if role == "ranger" else role
+        is_boss = actual_role == "boss"
+
         model = member_config.get("model", llm_defaults.get("model"))
         llm_client = LLMClient(
             provider=llm_defaults.get("provider", "anthropic"),
@@ -97,8 +100,13 @@ async def main() -> None:
             timeout=llm_defaults.get("timeout", 2.0),
         )
         system_prompt = get_system_prompt(actual_role)
+
+        # Boss agent uses different character_id and interval
+        character_id = "boss" if is_boss else actual_role
+        llm_interval = member_config.get("llm_interval", 4.0 if is_boss else 3.0)
+
         agent = BaseAgent(
-            character_id=actual_role,
+            character_id=character_id,
             role=actual_role,
             name=member_config.get("name", role),
             engine=engine,
@@ -106,24 +114,33 @@ async def main() -> None:
             system_prompt=system_prompt,
             agent_index=idx,
             llm_semaphore=llm_semaphore,
+            is_boss=is_boss,
+            llm_interval=llm_interval,
         )
         agents.append(agent)
 
-    logger.info("Created %d agents: %s", len(agents), [a.name for a in agents])
+    # Inject agent references into engine (for AI Log)
+    engine.set_agents(agents)
+
+    logger.info(
+        "Created %d agents: %s",
+        len(agents),
+        [(a.name, a.role, "boss" if a.is_boss else "player") for a in agents],
+    )
 
     # Track background tasks for graceful cleanup
     background_tasks: list[asyncio.Task] = []
 
     async def startup():
-        """Launch agent loops on FastAPI startup. Game waits for user to click Start."""
+        """Launch agent loops on FastAPI startup."""
         for agent in agents:
             task = asyncio.create_task(agent.run())
             background_tasks.append(task)
-        logger.info("Agents started, waiting for game start command")
+        logger.info("Agents started (%d), waiting for game start command", len(agents))
 
     app.add_event_handler("startup", startup)
 
-    # Graceful shutdown: cancel background tasks
+    # Graceful shutdown
     async def shutdown():
         logger.info("Shutting down: cancelling %d background tasks", len(background_tasks))
         for task in background_tasks:

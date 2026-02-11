@@ -305,7 +305,7 @@ class Character:
             "cooldowns": {str(k): round(v, 2) for k, v in self.cooldowns.items()},
             "buffs": [{"id": b.buff_id, "name": b.name, "duration": round(b.duration, 2), "params": b.params} for b in self.buffs],
             "debuffs": [{"id": d.debuff_id, "name": d.name, "duration": round(d.duration, 2), "params": d.params} for d in self.debuffs],
-            "skills": [{"id": s.id, "name": s.name, "cooldown": s.cooldown, "mana_cost": s.mana_cost, "cast_time": s.cast_time, "description": s.description} for s in self.skills],
+            "skills": [{"id": s.id, "name": s.name, "cooldown": s.cooldown, "mana_cost": s.mana_cost, "cast_time": s.cast_time, "description": s.description, "auto": s.auto} for s in self.skills],
             "last_action": self.last_action,
         }
 

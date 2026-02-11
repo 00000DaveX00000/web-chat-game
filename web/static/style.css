@@ -26,6 +26,7 @@
   --role-mage: #9944cc;
   --role-rogue: #cc3344;
   --role-hunter: #cc8833;
+  --role-boss: #ff4444;
 }
 
 html, body {
@@ -241,125 +242,49 @@ html, body {
   overflow: hidden;
 }
 
-/* ===== Boss Info Panel ===== */
-#boss-info {
-  padding: 8px 10px;
-  border-bottom: 3px solid var(--border-pixel);
+/* ===== Log Tab Bar (BATTLE | AI) ===== */
+#log-tab-bar {
+  display: flex;
+  gap: 0;
   background: var(--bg-panel);
+  border-bottom: 3px solid var(--border-pixel);
   flex-shrink: 0;
 }
 
-#boss-info-name {
-  font-family: var(--pixel-font);
-  font-size: 10px;
-  color: var(--text-red);
-  margin-bottom: 6px;
-}
-
-#boss-hp-bar-wrap {
-  position: relative;
-  width: 100%;
-  height: 22px;
-  background: #222;
-  border: 2px solid #555;
-  margin-bottom: 4px;
-}
-#boss-hp-bar-fill {
-  position: absolute;
-  top: 0; left: 0;
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(180deg, #cc3333, #992222);
-  transition: width 0.3s ease;
-}
-#boss-hp-text {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.log-main-tab {
+  flex: 1;
   font-family: var(--pixel-font);
   font-size: 9px;
-  color: #fff;
-  text-shadow: 1px 1px 0 #000;
-  z-index: 1;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: center;
+}
+.log-main-tab:hover {
+  color: var(--text-white);
+}
+.log-main-tab.active {
+  color: var(--accent-gold);
+  border-bottom-color: var(--accent-gold);
+  background: rgba(255,170,0,0.05);
 }
 
-#boss-phase-text {
-  font-size: 18px;
-  color: var(--text-yellow);
-  margin-bottom: 4px;
+/* Log panels */
+.log-panel {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
-
-/* Boss cast bar */
-#boss-cast-bar {
-  position: relative;
-  height: 16px;
-  background: #1a1a2a;
-  border: 2px solid var(--text-yellow);
-  margin: 4px 0;
+.log-panel.active {
   display: flex;
-  align-items: center;
-}
-#boss-cast-fill {
-  position: absolute;
-  top: 0; left: 0;
-  height: 100%;
-  background: var(--text-yellow);
-  opacity: 0.4;
-  transition: width 0.3s ease;
-}
-#boss-cast-name {
-  position: relative;
-  z-index: 1;
-  font-size: 16px;
-  color: var(--text-yellow);
-  margin-left: 4px;
-}
-#boss-cast-time {
-  position: relative;
-  z-index: 1;
-  font-size: 16px;
-  color: #fff;
-  margin-left: auto;
-  margin-right: 4px;
-}
-
-#boss-mechanics {
-  font-size: 18px;
-  color: var(--text-orange);
-  line-height: 1.4;
-}
-#boss-mechanics .mech-item::before {
-  content: '\26A0 ';
-}
-
-#boss-debuffs {
-  font-size: 16px;
-  color: var(--text-blue);
-  margin-top: 2px;
-}
-
-#boss-enrage {
-  font-family: var(--pixel-font);
-  font-size: 8px;
-  color: var(--text-red);
-  margin-top: 4px;
-  animation: pulse-glow-red 1s infinite;
-}
-@keyframes pulse-glow-red {
-  0%, 100% { text-shadow: 0 0 4px rgba(255,51,51,0.3); }
-  50% { text-shadow: 0 0 12px rgba(255,51,51,0.8); }
 }
 
 /* ===== Battle Log Container ===== */
-#battle-log-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+#battle-log-panel {
   background: var(--bg-dark);
 }
 
@@ -426,7 +351,6 @@ html, body {
 .log-entry.system {
   color: var(--text-muted);
 }
-/* AI decision log entries */
 .log-entry.ai_decision {
   color: #33ddff;
   background: rgba(51,221,255,0.05);
@@ -436,10 +360,102 @@ html, body {
   font-style: italic;
 }
 
-/* ===== Character Strip - Grid Layout ===== */
+/* ===== AI Log Panel ===== */
+#ai-log-panel {
+  background: var(--bg-dark);
+}
+
+#ai-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+#ai-log::-webkit-scrollbar {
+  width: 6px;
+}
+#ai-log::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+#ai-log::-webkit-scrollbar-thumb {
+  background: var(--border-pixel);
+}
+
+.ai-log-entry {
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border-pixel);
+  border-left: 3px solid var(--text-muted);
+  background: rgba(17,17,40,0.8);
+}
+.ai-log-entry.boss-entry {
+  border-left-color: var(--role-boss);
+}
+.ai-log-entry.tank-entry {
+  border-left-color: var(--role-tank);
+}
+.ai-log-entry.healer-entry {
+  border-left-color: var(--role-healer);
+}
+.ai-log-entry.mage-entry {
+  border-left-color: var(--role-mage);
+}
+.ai-log-entry.rogue-entry {
+  border-left-color: var(--role-rogue);
+}
+.ai-log-entry.hunter-entry {
+  border-left-color: var(--role-hunter);
+}
+
+.ai-log-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ai-log-name {
+  font-family: var(--pixel-font);
+  font-size: 8px;
+  color: var(--text-white);
+}
+.ai-log-time {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.ai-log-query {
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  max-height: 60px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+.ai-log-response {
+  font-size: 15px;
+  color: #33ddff;
+  font-weight: bold;
+}
+.ai-log-reason {
+  font-size: 14px;
+  color: var(--text-white);
+  font-style: italic;
+  margin-top: 2px;
+}
+.ai-log-instruction {
+  font-size: 14px;
+  color: var(--accent-gold);
+  font-weight: bold;
+  background: rgba(255,170,0,0.1);
+  padding: 1px 4px;
+  margin-top: 2px;
+}
+
+/* ===== Character Strip - 6 Column Grid ===== */
 #char-strip {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 6px 8px;
   background: var(--bg-panel);
@@ -454,11 +470,20 @@ html, body {
   font-size: 16px;
   line-height: 1.3;
 }
+.char-card[data-role="boss"]   { border-color: var(--role-boss); }
 .char-card[data-role="tank"]   { border-color: var(--role-tank); }
 .char-card[data-role="healer"] { border-color: var(--role-healer); }
 .char-card[data-role="mage"]   { border-color: var(--role-mage); }
 .char-card[data-role="rogue"]  { border-color: var(--role-rogue); }
 .char-card[data-role="hunter"] { border-color: var(--role-hunter); }
+
+/* Boss card red theme */
+.boss-card {
+  background: #1a0808;
+}
+.boss-card .hp-fill {
+  background: linear-gradient(180deg, #ff4444, #cc2222) !important;
+}
 
 .char-card.dead {
   opacity: 0.5;
@@ -481,6 +506,44 @@ html, body {
   font-size: 8px;
   color: var(--text-white);
   flex: 1;
+}
+
+/* Boss badges row */
+.boss-phase-row {
+  min-height: 16px;
+}
+.boss-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.boss-badge {
+  font-family: var(--pixel-font);
+  font-size: 7px;
+  padding: 1px 4px;
+  border: 1px solid;
+}
+.boss-badge.phase-badge {
+  color: var(--text-yellow);
+  border-color: var(--text-yellow);
+}
+.boss-badge.adds-badge {
+  color: var(--text-orange);
+  border-color: var(--text-orange);
+}
+.boss-badge.enrage-badge {
+  color: var(--text-red);
+  border-color: var(--text-red);
+  animation: pulse-glow-red 1s infinite;
+}
+.boss-badge.enrage-timer-badge {
+  color: var(--text-red);
+  border-color: var(--text-red);
+}
+
+@keyframes pulse-glow-red {
+  0%, 100% { text-shadow: 0 0 4px rgba(255,51,51,0.3); }
+  50% { text-shadow: 0 0 12px rgba(255,51,51,0.8); }
 }
 
 /* ===== Source Tag (Decision Source) ===== */
@@ -566,8 +629,8 @@ html, body {
 }
 
 .skill-slot {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 2px solid #555;
   background: #111;
   display: flex;
@@ -580,11 +643,11 @@ html, body {
 }
 
 .skill-slot .skill-icon {
-  font-size: 11px;
+  font-size: 10px;
   color: #aaa;
   text-align: center;
   line-height: 1.1;
-  max-width: 40px;
+  max-width: 36px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -668,7 +731,7 @@ html, body {
   }
 }
 
-/* Card instruction (📥 what agent received) */
+/* Card instruction */
 .card-instruction {
   font-size: 13px;
   color: var(--accent-gold);
@@ -681,8 +744,15 @@ html, body {
 .card-instruction:empty {
   display: none;
 }
+.card-instruction.flash {
+  animation: instruction-flash 0.6s ease-in-out 3;
+}
+@keyframes instruction-flash {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(255,170,0,0.2); }
+}
 
-/* Card action (📤 what agent decided) */
+/* Card action */
 .card-action {
   font-size: 14px;
   color: var(--text-white);
@@ -702,7 +772,7 @@ html, body {
   color: #888;
 }
 
-/* Card reason (💬 AI reasoning) */
+/* Card reason */
 .card-reason {
   font-size: 13px;
   color: var(--text-muted);
@@ -737,6 +807,14 @@ html, body {
   z-index: 1;
 }
 
+/* Boss cast bar uses red */
+.boss-card .card-cast-bar {
+  border-color: var(--text-red);
+}
+.boss-card .card-cast-fill {
+  background: var(--text-red);
+}
+
 .card-buffs {
   font-size: 13px;
   color: var(--text-blue);
@@ -766,6 +844,7 @@ html, body {
   flex-shrink: 0;
 }
 
+/* Tactical quick buttons */
 .quick-btn {
   font-family: var(--pixel-font);
   font-size: 7px;
@@ -778,6 +857,14 @@ html, body {
 .quick-btn:hover {
   color: var(--accent-gold);
   border-color: var(--accent-gold);
+}
+.quick-btn.tactical {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  background: rgba(255,170,0,0.05);
+}
+.quick-btn.tactical:hover {
+  background: rgba(255,170,0,0.2);
 }
 
 #cmd-input-wrap {
@@ -866,20 +953,23 @@ html, body {
 }
 
 /* ===== Responsive ===== */
+@media (max-width: 1400px) {
+  .skill-slot { width: 36px; height: 36px; }
+  .skill-slot .skill-icon { font-size: 9px; }
+}
+
 @media (max-width: 1200px) {
   #game-container { width: 600px; height: 350px; }
-  .skill-slot { width: 38px; height: 38px; }
+  .skill-slot { width: 34px; height: 34px; }
 }
 
 @media (max-width: 960px) {
   #main-content { flex-direction: column; }
   #game-column { border-right: none; border-bottom: 3px solid var(--border-pixel); min-width: 0; }
   #info-column { flex-direction: row; }
-  #boss-info { width: 40%; border-bottom: none; border-right: 3px solid var(--border-pixel); }
-  #battle-log-container { flex: 1; }
   #char-strip {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     overflow-x: auto;
   }
-  .skill-slot { width: 34px; height: 34px; }
+  .skill-slot { width: 30px; height: 30px; }
 }

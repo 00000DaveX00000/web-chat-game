@@ -5,7 +5,7 @@ from __future__ import annotations
 from game.skills import ROLE_SKILLS, SkillDef
 
 
-def skill_to_tool(skill: SkillDef) -> dict:
+def skill_to_tool(skill: SkillDef, is_boss: bool = False) -> dict:
     """Convert a SkillDef into an Anthropic tool definition."""
     properties: dict = {
         "reason": {
@@ -16,14 +16,23 @@ def skill_to_tool(skill: SkillDef) -> dict:
     required = ["reason"]
 
     if skill.target_type in ("enemy", "ally"):
-        properties["target"] = {
-            "type": "string",
-            "description": "目标ID. 可选: boss, tank, healer, mage, rogue, hunter, add_0, add_1...",
-            "enum": [
-                "boss", "tank", "healer", "mage", "rogue", "hunter",
-                "add_0", "add_1", "add_2", "add_3",
-            ],
-        }
+        if is_boss:
+            # Boss targets players
+            properties["target"] = {
+                "type": "string",
+                "description": "目标ID. 可选: tank, healer, mage, rogue, hunter",
+                "enum": ["tank", "healer", "mage", "rogue", "hunter"],
+            }
+        else:
+            # Players target boss/adds/allies
+            properties["target"] = {
+                "type": "string",
+                "description": "目标ID. 可选: boss, tank, healer, mage, rogue, hunter, add_0, add_1...",
+                "enum": [
+                    "boss", "tank", "healer", "mage", "rogue", "hunter",
+                    "add_0", "add_1", "add_2", "add_3",
+                ],
+            }
         required.insert(0, "target")
 
     # Build description including cooldown/cost/cast info
@@ -46,10 +55,21 @@ def skill_to_tool(skill: SkillDef) -> dict:
     }
 
 
-def build_tools_for_role(role: str) -> list[dict]:
-    """Build all 4 skill tool definitions for a given role."""
+def build_tools_for_role(role: str, exclude_auto: bool = True) -> list[dict]:
+    """Build skill tool definitions for a given role.
+
+    Parameters
+    ----------
+    role : str
+        Role key (tank / healer / mage / rogue / hunter / boss).
+    exclude_auto : bool
+        If True, exclude auto skills (they are handled by the auto loop).
+    """
     skills = ROLE_SKILLS.get(role, [])
-    return [skill_to_tool(s) for s in skills]
+    if exclude_auto:
+        skills = [s for s in skills if not s.auto]
+    is_boss = role == "boss"
+    return [skill_to_tool(s, is_boss=is_boss) for s in skills]
 
 
 def tool_name_to_skill_id(tool_name: str) -> int:
