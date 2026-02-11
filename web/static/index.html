@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Raid Battle - Pixel RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="game-area">
+      <div id="game-container"></div>
+      <div id="god-command-bar">
+        <label id="god-label" for="god-input">&gt; GOD CMD:</label>
+        <input id="god-input" type="text" placeholder="Enter divine command..." autocomplete="off">
+        <button id="god-send">SEND</button>
+      </div>
+    </div>
+    <div id="side-panel">
+      <h2 id="log-title">BATTLE LOG</h2>
+      <div id="battle-log"></div>
+      <div id="status-bar">
+        <span id="ws-status">DISCONNECTED</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="/static/ws.js"></script>
+  <script src="/static/scenes/BootScene.js"></script>
+  <script src="/static/scenes/BattleScene.js"></script>
+  <script src="/static/scenes/UIScene.js"></script>
+  <script src="/static/game.js"></script>
+</body>
+</html>

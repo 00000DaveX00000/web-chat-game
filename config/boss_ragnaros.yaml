@@ -1,0 +1,76 @@
+name: "熔火之王拉格纳罗斯"
+hp: 80000
+attack_min: 300
+attack_max: 500
+attack_interval: 2.0  # 普攻间隔(秒)
+
+phases:
+  - name: "phase1"
+    hp_threshold: 1.0  # 100% ~ 60%
+    description: "正常阶段 - Boss使用基础攻击和火焰冲击"
+    abilities:
+      - name: "烈焰之击"
+        damage_min: 400
+        damage_max: 600
+        cooldown: 8
+        target: "tank"  # 攻击当前坦克
+        type: "single"
+      - name: "熔岩喷射"
+        damage_min: 200
+        damage_max: 350
+        cooldown: 15
+        target: "random"
+        type: "single"
+
+  - name: "phase2"
+    hp_threshold: 0.6  # 60% ~ 30%
+    description: "狂暴阶段 - Boss攻击加强，召唤熔岩元素"
+    abilities:
+      - name: "烈焰之击"
+        damage_min: 500
+        damage_max: 800
+        cooldown: 6
+        target: "tank"
+        type: "single"
+      - name: "熔火之雨"
+        damage_min: 150
+        damage_max: 250
+        cooldown: 12
+        target: "all"
+        type: "aoe"
+      - name: "召唤熔岩元素"
+        cooldown: 25
+        type: "summon"
+        summon:
+          name: "熔岩元素"
+          hp: 3000
+          attack_min: 100
+          attack_max: 200
+          count: 2
+
+  - name: "phase3"
+    hp_threshold: 0.3  # 30% ~ 0%
+    description: "最终阶段 - Boss进入狂暴，全力攻击"
+    enrage: true
+    attack_multiplier: 1.5
+    abilities:
+      - name: "灭世之焰"
+        damage_min: 600
+        damage_max: 1000
+        cooldown: 5
+        target: "tank"
+        type: "single"
+      - name: "熔火之雨"
+        damage_min: 200
+        damage_max: 350
+        cooldown: 10
+        target: "all"
+        type: "aoe"
+      - name: "熔岩喷射"
+        damage_min: 300
+        damage_max: 500
+        cooldown: 8
+        target: "random"
+        type: "single"
+
+enrage_timer: 300  # 5分钟狂暴计时(秒)

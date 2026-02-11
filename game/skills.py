@@ -1,0 +1,297 @@
+"""Skill data definitions for all character classes."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class SkillDef:
+    id: int
+    name: str
+    role: str  # tank / healer / mage / rogue / hunter
+    cooldown: float  # seconds
+    mana_cost: int
+    cast_time: float  # 0 = instant
+    target_type: str  # "enemy" | "self" | "ally" | "ally_all" | "enemy_all"
+    description: str = ""
+    # effect parameters stored as a flat dict
+    effects: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Tank skills
+# ---------------------------------------------------------------------------
+TAUNT = SkillDef(
+    id=101,
+    name="嘲讽",
+    role="tank",
+    cooldown=8,
+    mana_cost=50,
+    cast_time=0,
+    target_type="enemy",
+    description="强制Boss攻击自己6秒",
+    effects={"type": "taunt", "duration": 6},
+)
+
+SHIELD_WALL = SkillDef(
+    id=102,
+    name="盾墙",
+    role="tank",
+    cooldown=30,
+    mana_cost=100,
+    cast_time=0,
+    target_type="self",
+    description="减伤50%持续8秒",
+    effects={"type": "buff", "buff_id": "shield_wall", "duration": 8, "damage_reduction": 0.5},
+)
+
+SUNDER_ARMOR = SkillDef(
+    id=103,
+    name="破甲攻击",
+    role="tank",
+    cooldown=0,
+    mana_cost=30,
+    cast_time=0,
+    target_type="enemy",
+    description="造成200伤害并降低目标护甲",
+    effects={"type": "damage", "base_damage": 200, "debuff_id": "sunder_armor", "duration": 10, "armor_reduction": 0.1},
+)
+
+HEROIC_STRIKE = SkillDef(
+    id=104,
+    name="英勇打击",
+    role="tank",
+    cooldown=0,
+    mana_cost=40,
+    cast_time=0,
+    target_type="enemy",
+    description="造成350伤害",
+    effects={"type": "damage", "base_damage": 350},
+)
+
+# ---------------------------------------------------------------------------
+# Healer skills
+# ---------------------------------------------------------------------------
+HEAL = SkillDef(
+    id=201,
+    name="治疗术",
+    role="healer",
+    cooldown=0,
+    mana_cost=120,
+    cast_time=1.5,
+    target_type="ally",
+    description="单体治疗800HP",
+    effects={"type": "heal", "base_heal": 800},
+)
+
+CIRCLE_OF_HEAL = SkillDef(
+    id=202,
+    name="治疗之环",
+    role="healer",
+    cooldown=6,
+    mana_cost=250,
+    cast_time=0,
+    target_type="ally_all",
+    description="群体治疗全队400HP",
+    effects={"type": "heal_aoe", "base_heal": 400},
+)
+
+DISPEL = SkillDef(
+    id=203,
+    name="驱散",
+    role="healer",
+    cooldown=4,
+    mana_cost=80,
+    cast_time=0,
+    target_type="ally",
+    description="移除目标一个负面Debuff",
+    effects={"type": "dispel"},
+)
+
+RESURRECT = SkillDef(
+    id=204,
+    name="复活",
+    role="healer",
+    cooldown=60,
+    mana_cost=500,
+    cast_time=3.0,
+    target_type="ally",
+    description="复活一个死亡队友,恢复30%HP",
+    effects={"type": "resurrect", "hp_percent": 0.3},
+)
+
+# ---------------------------------------------------------------------------
+# Mage skills
+# ---------------------------------------------------------------------------
+FIREBALL = SkillDef(
+    id=301,
+    name="火球术",
+    role="mage",
+    cooldown=0,
+    mana_cost=100,
+    cast_time=1.5,
+    target_type="enemy",
+    description="造成500伤害",
+    effects={"type": "damage", "base_damage": 500},
+)
+
+BLIZZARD = SkillDef(
+    id=302,
+    name="暴风雪",
+    role="mage",
+    cooldown=8,
+    mana_cost=200,
+    cast_time=0,
+    target_type="enemy_all",
+    description="AOE造成300伤害",
+    effects={"type": "damage_aoe", "base_damage": 300},
+)
+
+FROST_NOVA = SkillDef(
+    id=303,
+    name="冰冻",
+    role="mage",
+    cooldown=15,
+    mana_cost=80,
+    cast_time=0,
+    target_type="enemy",
+    description="冻结目标3秒(打断施法)",
+    effects={"type": "control", "control_type": "freeze", "duration": 3},
+)
+
+SPELL_BARRIER = SkillDef(
+    id=304,
+    name="法术屏障",
+    role="mage",
+    cooldown=25,
+    mana_cost=150,
+    cast_time=0,
+    target_type="self",
+    description="免疫下一次伤害",
+    effects={"type": "buff", "buff_id": "spell_barrier", "charges": 1},
+)
+
+# ---------------------------------------------------------------------------
+# Rogue skills
+# ---------------------------------------------------------------------------
+BACKSTAB = SkillDef(
+    id=401,
+    name="背刺",
+    role="rogue",
+    cooldown=0,
+    mana_cost=40,
+    cast_time=0,
+    target_type="enemy",
+    description="造成450伤害",
+    effects={"type": "damage", "base_damage": 450},
+)
+
+POISON_BLADE = SkillDef(
+    id=402,
+    name="毒刃",
+    role="rogue",
+    cooldown=6,
+    mana_cost=35,
+    cast_time=0,
+    target_type="enemy",
+    description="造成150伤害并附加DOT(80/s持续5s)",
+    effects={"type": "damage", "base_damage": 150, "dot": True, "dot_id": "poison", "dot_damage": 80, "dot_duration": 5},
+)
+
+EVASION = SkillDef(
+    id=403,
+    name="闪避",
+    role="rogue",
+    cooldown=20,
+    mana_cost=0,
+    cast_time=0,
+    target_type="self",
+    description="闪避所有攻击持续5秒",
+    effects={"type": "buff", "buff_id": "evasion", "duration": 5},
+)
+
+DEADLY_COMBO = SkillDef(
+    id=404,
+    name="致命连击",
+    role="rogue",
+    cooldown=10,
+    mana_cost=0,  # costs all energy, handled in combat
+    cast_time=0,
+    target_type="enemy",
+    description="三连击,消耗全部能量,每点能量造成1.5伤害",
+    effects={"type": "special", "special_id": "deadly_combo", "damage_per_energy": 1.5},
+)
+
+# ---------------------------------------------------------------------------
+# Hunter skills
+# ---------------------------------------------------------------------------
+AIMED_SHOT = SkillDef(
+    id=501,
+    name="精准射击",
+    role="hunter",
+    cooldown=0,
+    mana_cost=60,
+    cast_time=1.0,
+    target_type="enemy",
+    description="造成420伤害",
+    effects={"type": "damage", "base_damage": 420},
+)
+
+MULTI_SHOT = SkillDef(
+    id=502,
+    name="多重射击",
+    role="hunter",
+    cooldown=6,
+    mana_cost=100,
+    cast_time=0,
+    target_type="enemy_all",
+    description="AOE造成250伤害",
+    effects={"type": "damage_aoe", "base_damage": 250},
+)
+
+HUNTERS_MARK = SkillDef(
+    id=503,
+    name="猎人印记",
+    role="hunter",
+    cooldown=0,
+    mana_cost=40,
+    cast_time=0,
+    target_type="enemy",
+    description="标记目标,全队对其伤害+15%持续12秒",
+    effects={"type": "debuff", "debuff_id": "hunters_mark", "duration": 12, "damage_amp": 0.15},
+)
+
+HEALING_WIND = SkillDef(
+    id=504,
+    name="治疗之风",
+    role="hunter",
+    cooldown=15,
+    mana_cost=120,
+    cast_time=0,
+    target_type="ally_all",
+    description="群体治疗全队250HP",
+    effects={"type": "heal_aoe", "base_heal": 250},
+)
+
+# ---------------------------------------------------------------------------
+# Skill registry
+# ---------------------------------------------------------------------------
+ALL_SKILLS: list[SkillDef] = [
+    TAUNT, SHIELD_WALL, SUNDER_ARMOR, HEROIC_STRIKE,
+    HEAL, CIRCLE_OF_HEAL, DISPEL, RESURRECT,
+    FIREBALL, BLIZZARD, FROST_NOVA, SPELL_BARRIER,
+    BACKSTAB, POISON_BLADE, EVASION, DEADLY_COMBO,
+    AIMED_SHOT, MULTI_SHOT, HUNTERS_MARK, HEALING_WIND,
+]
+
+SKILLS: dict[int, SkillDef] = {s.id: s for s in ALL_SKILLS}
+
+ROLE_SKILLS: dict[str, list[SkillDef]] = {}
+for _s in ALL_SKILLS:
+    ROLE_SKILLS.setdefault(_s.role, []).append(_s)
+
+
+def get_skill(skill_id: int) -> SkillDef | None:
+    return SKILLS.get(skill_id)

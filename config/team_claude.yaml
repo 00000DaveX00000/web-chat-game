@@ -1,0 +1,30 @@
+team_name: "纯血Claude战队"
+
+llm_defaults:
+  provider: anthropic
+  api_key_env: ANTHROPIC_AUTH_TOKEN
+  model: qwen-plus
+  temperature: 0.3
+  max_tokens: 150
+  timeout: 10.0
+
+members:
+  tank:
+    name: "圣骑士·克劳德"
+    role: tank
+
+  healer:
+    name: "牧师·索奈特"
+    role: healer
+
+  mage:
+    name: "法师·欧帕斯"
+    role: mage
+
+  rogue:
+    name: "盗贼·海酷"
+    role: rogue
+
+  hunter:
+    name: "猎人·阿尔法"
+    role: hunter

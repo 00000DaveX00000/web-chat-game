@@ -1,0 +1,30 @@
+team_name: "DeepSeek战队"
+
+llm_defaults:
+  provider: deepseek
+  api_key_env: DEEPSEEK_API_KEY
+  model: deepseek-chat
+  temperature: 0.3
+  max_tokens: 150
+  timeout: 2.0
+
+members:
+  tank:
+    name: "圣骑士·深索"
+    role: tank
+
+  healer:
+    name: "牧师·思者"
+    role: healer
+
+  mage:
+    name: "法师·编码"
+    role: mage
+
+  rogue:
+    name: "盗贼·推理"
+    role: rogue
+
+  ranger:
+    name: "猎人·探索"
+    role: ranger

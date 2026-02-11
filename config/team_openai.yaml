@@ -1,0 +1,31 @@
+team_name: "OpenAI战队"
+
+llm_defaults:
+  provider: openai
+  api_key_env: OPENAI_API_KEY
+  model: gpt-4o
+  temperature: 0.3
+  max_tokens: 150
+  timeout: 2.0
+
+members:
+  tank:
+    name: "圣骑士·GPT"
+    role: tank
+
+  healer:
+    name: "牧师·Turbo"
+    role: healer
+
+  mage:
+    name: "法师·Omni"
+    role: mage
+
+  rogue:
+    name: "盗贼·Mini"
+    role: rogue
+    model: gpt-4o-mini
+
+  ranger:
+    name: "猎人·Davinci"
+    role: ranger

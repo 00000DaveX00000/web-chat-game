@@ -1,0 +1,42 @@
+team_name: "混合战队"
+
+llm_defaults:
+  temperature: 0.3
+  max_tokens: 150
+  timeout: 2.0
+
+members:
+  tank:
+    name: "圣骑士·克劳德"
+    role: tank
+    provider: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-sonnet-4-5-20250929
+
+  healer:
+    name: "牧师·GPT"
+    role: healer
+    provider: openai
+    api_key_env: OPENAI_API_KEY
+    model: gpt-4o
+
+  mage:
+    name: "法师·深索"
+    role: mage
+    provider: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-chat
+
+  rogue:
+    name: "盗贼·海酷"
+    role: rogue
+    provider: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-haiku-4-5-20251001
+
+  ranger:
+    name: "猎人·Mini"
+    role: ranger
+    provider: openai
+    api_key_env: OPENAI_API_KEY
+    model: gpt-4o-mini
