@@ -20,11 +20,11 @@ class MoltenElemental:
     def __init__(self, add_id: str) -> None:
         self.id = add_id
         self.name = "熔岩元素"
-        self.max_hp = 6000
-        self.hp = 6000
+        self.max_hp = 4000
+        self.hp = 4000
         self.alive = True
-        self.attack_damage = 200
-        self.attack_cooldown = 2.0
+        self.attack_damage = 150
+        self.attack_cooldown = 2.5
         self.attack_timer = 0.0
         self.debuffs: list[Debuff] = []
 
@@ -423,7 +423,7 @@ class Boss:
             self.add_aoe_timer += dt
             if self.add_aoe_timer >= 2.0:
                 self.add_aoe_timer = 0.0
-                aoe_damage = 80 * len(live_adds)
+                aoe_damage = 60 * len(live_adds)
                 living = [c for c in characters if c.alive]
                 for c in living:
                     actual = c.take_damage(aoe_damage)
