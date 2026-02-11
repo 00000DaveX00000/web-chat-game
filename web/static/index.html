@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Raid Battle - Pixel RPG</title>
+  <title>AI副本战 - 熔火之心</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -20,12 +20,12 @@
       </div>
       <div id="game-timer">00:00</div>
       <div id="game-controls">
-        <button id="btn-start" class="ctrl-btn start">START</button>
-        <button id="btn-stop" class="ctrl-btn stop" disabled>STOP</button>
-        <button id="btn-restart" class="ctrl-btn restart">RESTART</button>
+        <button id="btn-start" class="ctrl-btn start">开始</button>
+        <button id="btn-stop" class="ctrl-btn stop" disabled>停止</button>
+        <button id="btn-restart" class="ctrl-btn restart">重置</button>
       </div>
-      <div id="game-status-badge">WAITING</div>
-      <div id="ws-status">DISCONNECTED</div>
+      <div id="game-status-badge">等待中</div>
+      <div id="ws-status">未连接</div>
     </div>
 
     <!-- Main Content -->
@@ -36,18 +36,21 @@
       <div id="info-column">
         <!-- Log Tabs: BATTLE | AI -->
         <div id="log-tab-bar">
-          <button class="log-main-tab active" data-panel="battle">BATTLE LOG</button>
-          <button class="log-main-tab" data-panel="ai">AI LOG</button>
+          <button class="log-main-tab active" data-panel="battle">战斗日志</button>
+          <button class="log-main-tab" data-panel="ai">AI日志</button>
         </div>
         <!-- Battle Log Panel -->
         <div id="battle-log-panel" class="log-panel active">
           <div id="log-tabs">
-            <button class="log-tab active" data-filter="all">ALL</button>
-            <button class="log-tab" data-filter="damage">DMG</button>
-            <button class="log-tab" data-filter="heal">HEAL</button>
-            <button class="log-tab" data-filter="mech">MECH</button>
-            <button class="log-tab" data-filter="cmd">CMD</button>
-            <button class="log-tab" data-filter="ai_decision">AI</button>
+            <button class="log-tab active" data-filter="all">全部</button>
+            <button class="log-tab role-tab" data-filter="boss">Boss</button>
+            <button class="log-tab role-tab" data-filter="tank">坦克</button>
+            <button class="log-tab role-tab" data-filter="healer">治疗</button>
+            <button class="log-tab role-tab" data-filter="mage">法师</button>
+            <button class="log-tab role-tab" data-filter="rogue">盗贼</button>
+            <button class="log-tab role-tab" data-filter="hunter">猎人</button>
+            <button class="log-tab" data-filter="cmd">指令</button>
+            <button class="log-tab" data-filter="system">系统</button>
           </div>
           <div id="battle-log"></div>
         </div>
@@ -58,38 +61,33 @@
       </div>
     </div>
 
-    <!-- Character Strip (6 cards: Boss + 5 players) -->
-    <div id="char-strip">
-      <!-- Boss Card -->
-      <div class="char-card boss-card" data-role="boss" id="card-boss">
-        <div class="card-header">
-          <span class="card-icon"></span>
-          <span class="card-name"></span>
+    <!-- Boss Strip (独立Boss卡片区域) -->
+    <div id="boss-strip">
+      <div id="card-boss" class="boss-card-wide">
+        <div class="boss-row-top">
+          <span class="boss-icon">🔥</span>
+          <span class="boss-name">拉格纳罗斯</span>
           <span class="source-tag waiting"></span>
-        </div>
-        <div class="card-bars">
-          <div class="bar-row hp-row">
-            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
-            <span class="bar-text hp-text"></span>
+          <div class="boss-hp-wrapper">
+            <div class="boss-hp-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="boss-hp-text">80000/80000</span>
           </div>
-          <div class="bar-row mp-row boss-phase-row">
-            <span class="boss-badges"></span>
-          </div>
+          <div class="boss-badges"></div>
         </div>
-        <div class="card-divider"></div>
-        <div class="skill-bar">
-          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        <div class="boss-row-mid">
+          <div class="skill-bar"></div>
+          <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
         </div>
-        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
-        <div class="card-divider"></div>
-        <div class="card-action"></div>
-        <div class="card-reason"></div>
-        <div class="card-buffs"></div>
+        <div class="boss-row-bottom">
+          <span class="card-action"></span>
+          <span class="card-reason"></span>
+          <span class="card-buffs"></span>
+        </div>
       </div>
+    </div>
 
+    <!-- Character Strip (5 player cards) -->
+    <div id="char-strip">
       <!-- Tank Card -->
       <div class="char-card" data-role="tank" id="card-tank">
         <div class="card-header">
@@ -108,12 +106,7 @@
           </div>
         </div>
         <div class="card-divider"></div>
-        <div class="skill-bar">
-          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-        </div>
+        <div class="skill-bar"></div>
         <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
         <div class="card-divider"></div>
         <div class="card-instruction"></div>
@@ -140,12 +133,7 @@
           </div>
         </div>
         <div class="card-divider"></div>
-        <div class="skill-bar">
-          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-        </div>
+        <div class="skill-bar"></div>
         <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
         <div class="card-divider"></div>
         <div class="card-instruction"></div>
@@ -172,12 +160,7 @@
           </div>
         </div>
         <div class="card-divider"></div>
-        <div class="skill-bar">
-          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-        </div>
+        <div class="skill-bar"></div>
         <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
         <div class="card-divider"></div>
         <div class="card-instruction"></div>
@@ -204,12 +187,7 @@
           </div>
         </div>
         <div class="card-divider"></div>
-        <div class="skill-bar">
-          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-        </div>
+        <div class="skill-bar"></div>
         <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
         <div class="card-divider"></div>
         <div class="card-instruction"></div>
@@ -236,12 +214,7 @@
           </div>
         </div>
         <div class="card-divider"></div>
-        <div class="skill-bar">
-          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
-        </div>
+        <div class="skill-bar"></div>
         <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
         <div class="card-divider"></div>
         <div class="card-instruction"></div>
@@ -254,27 +227,28 @@
     <!-- Command Bar -->
     <div id="cmd-bar">
       <div id="cmd-quick">
-        <button class="quick-btn tactical" data-cmd="打断!">INTERRUPT</button>
-        <button class="quick-btn tactical" data-cmd="开盾墙!">SHIELD</button>
-        <button class="quick-btn tactical" data-cmd="群疗!">AOE HEAL</button>
-        <button class="quick-btn tactical" data-cmd="嘲讽!">TAUNT</button>
-        <button class="quick-btn tactical" data-cmd="集火boss!">FOCUS</button>
-        <button class="quick-btn tactical" data-cmd="清小怪!">CLEAR ADDS</button>
+        <button class="quick-btn tactical" data-cmd="打断!">打断</button>
+        <button class="quick-btn tactical" data-cmd="开盾墙!">盾墙</button>
+        <button class="quick-btn tactical" data-cmd="群疗!">群疗</button>
+        <button class="quick-btn tactical" data-cmd="嘲讽!">嘲讽</button>
+        <button class="quick-btn tactical" data-cmd="集火boss!">集火</button>
+        <button class="quick-btn tactical" data-cmd="清小怪!">清怪</button>
+        <button class="quick-btn tactical" data-cmd="驱散!">驱散</button>
       </div>
       <div id="cmd-input-wrap">
         <span id="cmd-prompt">&gt;</span>
         <input id="god-input" type="text" placeholder="输入战术指令 (自然语言)..." autocomplete="off">
-        <button id="god-send">SEND</button>
+        <button id="god-send">发送</button>
       </div>
       <button id="cmd-help-btn" title="命令帮助">?</button>
       <div id="cmd-help-panel" class="hidden">
         <div class="help-title">战术指令参考</div>
         <div class="help-row"><b>打断!</b> 法师冰冻打断Boss读条</div>
-        <div class="help-row"><b>开盾墙!</b> 坦克开启50%减伤</div>
+        <div class="help-row"><b>盾墙!</b> 坦克开启50%减伤</div>
         <div class="help-row"><b>群疗!</b> 治疗释放全团治疗</div>
         <div class="help-row"><b>嘲讽!</b> 坦克强制Boss攻击自己</div>
-        <div class="help-row"><b>集火boss!</b> 全DPS集中输出Boss</div>
-        <div class="help-row"><b>清小怪!</b> DPS优先清理小怪</div>
+        <div class="help-row"><b>集火!</b> 全DPS集中输出Boss</div>
+        <div class="help-row"><b>清怪!</b> DPS优先清理小怪</div>
         <div class="help-row"><b>驱散!</b> 治疗驱散负面效果</div>
         <div class="help-row">或直接输入自然语言战术广播给所有AI</div>
       </div>

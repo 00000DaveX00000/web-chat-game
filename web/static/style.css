@@ -20,13 +20,13 @@
   --accent-gold: #ffaa00;
   --pixel-font: 'Press Start 2P', monospace;
   --body-font: 'VT323', monospace;
-  /* Role colors */
-  --role-tank: #4488cc;
-  --role-healer: #33cc66;
-  --role-mage: #9944cc;
-  --role-rogue: #cc3344;
-  --role-hunter: #cc8833;
-  --role-boss: #ff4444;
+  /* Role colors - brighter */
+  --role-tank: #42A5F5;
+  --role-healer: #66BB6A;
+  --role-mage: #AB47BC;
+  --role-rogue: #FF7043;
+  --role-hunter: #FFA726;
+  --role-boss: #EF5350;
 }
 
 html, body {
@@ -295,6 +295,7 @@ html, body {
   background: var(--bg-panel);
   border-bottom: 2px solid var(--border-pixel);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .log-tab {
@@ -315,6 +316,14 @@ html, body {
   border-color: var(--accent-gold);
   background: rgba(255,170,0,0.1);
 }
+
+/* Role-colored log filter tabs */
+.log-tab.role-tab[data-filter="boss"]   { color: var(--role-boss); border-color: var(--role-boss); }
+.log-tab.role-tab[data-filter="tank"]   { color: var(--role-tank); border-color: var(--role-tank); }
+.log-tab.role-tab[data-filter="healer"] { color: var(--role-healer); border-color: var(--role-healer); }
+.log-tab.role-tab[data-filter="mage"]   { color: var(--role-mage); border-color: var(--role-mage); }
+.log-tab.role-tab[data-filter="rogue"]  { color: var(--role-rogue); border-color: var(--role-rogue); }
+.log-tab.role-tab[data-filter="hunter"] { color: var(--role-hunter); border-color: var(--role-hunter); }
 
 #battle-log {
   flex: 1;
@@ -347,6 +356,7 @@ html, body {
 }
 .log-entry.cmd {
   color: var(--accent-gold);
+  background: rgba(255,170,0,0.05);
 }
 .log-entry.system {
   color: var(--text-muted);
@@ -359,6 +369,14 @@ html, body {
   color: #999966;
   font-style: italic;
 }
+
+/* Log entries colored by role */
+.log-entry.boss { color: var(--role-boss); }
+.log-entry.tank { color: var(--role-tank); }
+.log-entry.healer { color: var(--role-healer); }
+.log-entry.mage { color: var(--role-mage); }
+.log-entry.rogue { color: var(--role-rogue); }
+.log-entry.hunter { color: var(--role-hunter); }
 
 /* ===== AI Log Panel ===== */
 #ai-log-panel {
@@ -408,6 +426,23 @@ html, body {
   border-left-color: var(--role-hunter);
 }
 
+/* AI log section headers */
+.ai-log-section-header {
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  padding: 4px 8px;
+  margin: 6px 0 4px;
+  border-bottom: 2px solid;
+}
+.ai-log-section-header.boss-section {
+  color: var(--role-boss);
+  border-bottom-color: var(--role-boss);
+}
+.ai-log-section-header.player-section {
+  color: var(--text-blue);
+  border-bottom-color: var(--text-blue);
+}
+
 .ai-log-header {
   display: flex;
   align-items: center;
@@ -452,66 +487,110 @@ html, body {
   margin-top: 2px;
 }
 
-/* ===== Character Strip - 6 Column Grid ===== */
-#char-strip {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
-  padding: 6px 8px;
-  background: var(--bg-panel);
-  border-top: 3px solid var(--border-pixel);
+/* ===== Boss Strip ===== */
+#boss-strip {
+  padding: 4px 8px;
+  background: linear-gradient(180deg, #1a0505, #0f0303);
+  border-top: 3px solid var(--role-boss);
+  border-bottom: 2px solid var(--border-pixel);
   flex-shrink: 0;
 }
 
-.char-card {
-  background: var(--bg-card);
-  border: 2px solid var(--border-pixel);
-  padding: 6px 8px;
-  font-size: 16px;
-  line-height: 1.3;
-}
-.char-card[data-role="boss"]   { border-color: var(--role-boss); }
-.char-card[data-role="tank"]   { border-color: var(--role-tank); }
-.char-card[data-role="healer"] { border-color: var(--role-healer); }
-.char-card[data-role="mage"]   { border-color: var(--role-mage); }
-.char-card[data-role="rogue"]  { border-color: var(--role-rogue); }
-.char-card[data-role="hunter"] { border-color: var(--role-hunter); }
-
-/* Boss card red theme */
-.boss-card {
+.boss-card-wide {
   background: #1a0808;
+  border: 2px solid var(--role-boss);
+  padding: 6px 10px;
+  box-shadow: inset 0 0 20px rgba(239,83,80,0.1);
 }
-.boss-card .hp-fill {
-  background: linear-gradient(180deg, #ff4444, #cc2222) !important;
-}
-
-.char-card.dead {
+.boss-card-wide.dead {
   opacity: 0.5;
   border-color: #333 !important;
 }
 
-.card-header {
+.boss-row-top {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.boss-icon {
+  font-size: 20px;
+}
+.boss-name {
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  color: var(--role-boss);
+  white-space: nowrap;
+}
+.boss-hp-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  max-width: 500px;
+}
+.boss-hp-bg {
+  flex: 1;
+  height: 18px;
+  background: #222;
+  border: 2px solid #555;
+  position: relative;
+}
+.boss-hp-text {
+  font-size: 14px;
+  color: #ccc;
+  white-space: nowrap;
+  min-width: 140px;
+}
+.boss-card-wide .hp-fill,
+.boss-card-wide .hp-fill.mid,
+.boss-card-wide .hp-fill.low {
+  background: linear-gradient(180deg, #ff4444, #cc2222) !important;
+}
+
+.boss-row-mid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 3px;
 }
-
-.card-icon {
-  font-size: 16px;
+.boss-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  overflow: hidden;
+}
+.boss-row-bottom .card-action {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+.boss-row-bottom .card-reason {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 30%;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.boss-row-bottom .card-buffs {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
 }
 
-.card-name {
-  font-family: var(--pixel-font);
-  font-size: 8px;
-  color: var(--text-white);
-  flex: 1;
+/* Boss cast bar red */
+.boss-card-wide .card-cast-bar {
+  border-color: var(--text-red);
+}
+.boss-card-wide .card-cast-fill {
+  background: var(--text-red);
 }
 
-/* Boss badges row */
-.boss-phase-row {
-  min-height: 16px;
-}
+/* Boss badges */
 .boss-badges {
   display: flex;
   gap: 4px;
@@ -544,6 +623,69 @@ html, body {
 @keyframes pulse-glow-red {
   0%, 100% { text-shadow: 0 0 4px rgba(255,51,51,0.3); }
   50% { text-shadow: 0 0 12px rgba(255,51,51,0.8); }
+}
+
+/* ===== Character Strip - 5 Column Grid ===== */
+#char-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg-panel);
+  border-top: 3px solid var(--border-pixel);
+  flex-shrink: 0;
+}
+
+.char-card {
+  height: 210px;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 2px solid var(--border-pixel);
+  padding: 6px 8px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+/* Role-colored card borders and subtle background tint */
+.char-card[data-role="tank"]   { border-color: var(--role-tank);   background: linear-gradient(180deg, rgba(66,165,245,0.08), var(--bg-card)); }
+.char-card[data-role="healer"] { border-color: var(--role-healer); background: linear-gradient(180deg, rgba(102,187,106,0.08), var(--bg-card)); }
+.char-card[data-role="mage"]   { border-color: var(--role-mage);   background: linear-gradient(180deg, rgba(171,71,188,0.08), var(--bg-card)); }
+.char-card[data-role="rogue"]  { border-color: var(--role-rogue);  background: linear-gradient(180deg, rgba(255,112,67,0.08), var(--bg-card)); }
+.char-card[data-role="hunter"] { border-color: var(--role-hunter); background: linear-gradient(180deg, rgba(255,167,38,0.08), var(--bg-card)); }
+
+/* Role-colored card names */
+.char-card[data-role="tank"]   .card-name { color: var(--role-tank); }
+.char-card[data-role="healer"] .card-name { color: var(--role-healer); }
+.char-card[data-role="mage"]   .card-name { color: var(--role-mage); }
+.char-card[data-role="rogue"]  .card-name { color: var(--role-rogue); }
+.char-card[data-role="hunter"] .card-name { color: var(--role-hunter); }
+
+.char-card.dead {
+  opacity: 0.5;
+  border-color: #333 !important;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.card-icon {
+  font-size: 16px;
+}
+
+.card-name {
+  font-family: var(--pixel-font);
+  font-size: 8px;
+  color: var(--text-white);
+  flex: 1;
+}
+
+/* Boss phase row (legacy) */
+.boss-phase-row {
+  min-height: 16px;
 }
 
 /* ===== Source Tag (Decision Source) ===== */
@@ -623,14 +765,15 @@ html, body {
 /* ===== WoW-style Skill Bar ===== */
 .skill-bar {
   display: flex;
-  gap: 4px;
-  margin: 4px 0;
+  gap: 3px;
+  margin: 3px 0;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .skill-slot {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 38px;
   border: 2px solid #555;
   background: #111;
   display: flex;
@@ -640,6 +783,23 @@ html, body {
   position: relative;
   overflow: hidden;
   cursor: default;
+}
+
+/* Boss skill slots are wider */
+.boss-card-wide .skill-slot {
+  width: 58px;
+  height: 30px;
+}
+
+/* Auto skill style */
+.skill-slot.auto-skill {
+  border-style: dashed;
+}
+.skill-slot.auto-skill.ready {
+  border-color: #668;
+}
+.skill-slot.auto-skill .skill-icon {
+  color: #888;
 }
 
 .skill-slot .skill-icon {
@@ -731,13 +891,17 @@ html, body {
   }
 }
 
+/* Card text truncation */
+.card-action, .card-reason, .card-instruction, .card-buffs {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Card instruction */
 .card-instruction {
   font-size: 13px;
   color: var(--accent-gold);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-height: 14px;
   padding: 1px 0;
 }
@@ -756,9 +920,6 @@ html, body {
 .card-action {
   font-size: 14px;
   color: var(--text-white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-height: 16px;
   font-weight: bold;
 }
@@ -776,9 +937,6 @@ html, body {
 .card-reason {
   font-size: 13px;
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-height: 14px;
   font-style: italic;
 }
@@ -807,7 +965,7 @@ html, body {
   z-index: 1;
 }
 
-/* Boss cast bar uses red */
+/* Legacy boss-card cast bar (kept for compatibility) */
 .boss-card .card-cast-bar {
   border-color: var(--text-red);
 }
@@ -819,9 +977,6 @@ html, body {
   font-size: 13px;
   color: var(--text-blue);
   min-height: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .card-buffs .debuff-item { color: var(--text-red); }
 .card-buffs .buff-item { color: var(--text-green); }
@@ -865,6 +1020,11 @@ html, body {
 }
 .quick-btn.tactical:hover {
   background: rgba(255,170,0,0.2);
+}
+.quick-btn.sent {
+  background: var(--accent-gold) !important;
+  color: var(--bg-dark) !important;
+  transition: all 0.15s;
 }
 
 #cmd-input-wrap {
@@ -968,7 +1128,7 @@ html, body {
   #game-column { border-right: none; border-bottom: 3px solid var(--border-pixel); min-width: 0; }
   #info-column { flex-direction: row; }
   #char-strip {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     overflow-x: auto;
   }
   .skill-slot { width: 30px; height: 30px; }

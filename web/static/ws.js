@@ -1,7 +1,7 @@
 /**
- * WebSocket client for the AI Raid Battle game (V3).
- * Handles 6-card layout (Boss + 5 players), AI Log panel,
- * tactical commands, and battle log filtering.
+ * WebSocket client for the AI Raid Battle game (V4).
+ * Handles boss-strip + 5-player char-strip layout, AI Log panel,
+ * tactical commands, and battle log filtering by role.
  */
 var GameWS = (function () {
   'use strict';
@@ -45,7 +45,7 @@ var GameWS = (function () {
     _connected = connected;
     var el = document.getElementById('ws-status');
     if (el) {
-      el.textContent = connected ? 'CONNECTED' : 'DISCONNECTED';
+      el.textContent = connected ? '\u5DF2\u8FDE\u63A5' : '\u672A\u8FDE\u63A5';
       el.className = connected ? 'connected' : '';
     }
   }
@@ -59,13 +59,13 @@ var GameWS = (function () {
 
     if (badge) {
       if (result && result !== 'stopped') {
-        badge.textContent = result === 'victory' ? 'VICTORY!' : 'DEFEAT';
+        badge.textContent = result === 'victory' ? '\u80DC\u5229!' : '\u5931\u8D25';
         badge.className = result === 'victory' ? 'victory' : 'defeat';
       } else if (running) {
-        badge.textContent = 'FIGHTING';
+        badge.textContent = '\u6218\u6597\u4E2D';
         badge.className = 'fighting';
       } else {
-        badge.textContent = 'WAITING';
+        badge.textContent = '\u7B49\u5F85\u4E2D';
         badge.className = '';
       }
     }
@@ -103,7 +103,7 @@ var GameWS = (function () {
     text.textContent = Math.round(pct) + '%';
   }
 
-  /* ---- Boss Card ---- */
+  /* ---- Boss Card (new structure) ---- */
   function _updateBossCard(bossCard) {
     if (!bossCard) return;
     var card = document.getElementById('card-boss');
@@ -116,10 +116,8 @@ var GameWS = (function () {
       card.classList.add('dead');
     }
 
-    // Header
-    var iconEl = card.querySelector('.card-icon');
-    var nameEl = card.querySelector('.card-name');
-    if (iconEl) iconEl.textContent = ROLE_ICONS.boss;
+    // Name (new: .boss-name instead of .card-name)
+    var nameEl = card.querySelector('.boss-name');
     if (nameEl) nameEl.textContent = bossCard.name || 'BOSS';
 
     // Source tag
@@ -128,21 +126,24 @@ var GameWS = (function () {
     // HP bar
     var hpPct = bossCard.max_hp > 0 ? (bossCard.hp / bossCard.max_hp) : 0;
     var hpFill = card.querySelector('.hp-fill');
-    var hpText = card.querySelector('.hp-text');
+    var hpText = card.querySelector('.boss-hp-text');
     if (hpFill) {
       hpFill.style.width = (hpPct * 100) + '%';
       hpFill.className = 'bar-fill hp-fill' + (hpPct > 0.6 ? '' : hpPct > 0.3 ? ' mid' : ' low');
     }
-    if (hpText) hpText.textContent = 'HP ' + bossCard.hp + '/' + bossCard.max_hp;
+    if (hpText) {
+      var pctDisplay = Math.round(hpPct * 100);
+      hpText.textContent = bossCard.hp + '/' + bossCard.max_hp + ' (' + pctDisplay + '%)';
+    }
 
-    // Boss badges (phase, adds, enrage)
+    // Boss badges (phase, adds, enrage) - Chinese text
     var badgesEl = card.querySelector('.boss-badges');
     if (badgesEl) {
       var bhtml = '';
       bhtml += '<span class="boss-badge phase-badge">P' + (bossCard.phase || 1) + '</span>';
       var addsCount = bossCard.adds_count || 0;
       if (addsCount > 0) {
-        bhtml += '<span class="boss-badge adds-badge">Adds:' + addsCount + '</span>';
+        bhtml += '<span class="boss-badge adds-badge">\u5C0F\u602A:' + addsCount + '</span>';
       }
       if (bossCard.enraged) {
         bhtml += '<span class="boss-badge enrage-badge">\u72C2\u66B4!</span>';
@@ -152,7 +153,7 @@ var GameWS = (function () {
       badgesEl.innerHTML = bhtml;
     }
 
-    // Skill slots
+    // Skill slots (shared function)
     _updateSkillSlots(card, bossCard);
 
     // Cast bar
@@ -171,7 +172,7 @@ var GameWS = (function () {
       }
     }
 
-    // Action / Reason
+    // Action / Reason / Buffs (in .boss-row-bottom)
     var actionEl = card.querySelector('.card-action');
     if (actionEl) {
       if (bossCard.last_action && bossCard.last_action.skill_name) {
@@ -359,36 +360,44 @@ var GameWS = (function () {
     }
   }
 
-  /* ---- Skill Slots ---- */
+  /* ---- Skill Slots (dynamic, show ALL skills) ---- */
   function _updateSkillSlots(card, charData) {
     var skills = charData.skills || [];
     var cooldowns = charData.cooldowns || {};
     var lastAction = charData.last_action;
-    var slots = card.querySelectorAll('.skill-slot');
+    var skillBar = card.querySelector('.skill-bar');
+    if (!skillBar) return;
     var now = Date.now() / 1000;
 
-    // Filter to non-auto skills for display
-    var displaySkills = [];
-    for (var s = 0; s < skills.length; s++) {
-      if (!skills[s].auto) {
-        displaySkills.push(skills[s]);
-      }
+    // Dynamically adjust slot count
+    var slots = skillBar.querySelectorAll('.skill-slot');
+    while (slots.length < skills.length) {
+      var s = document.createElement('div');
+      s.className = 'skill-slot';
+      s.innerHTML = '<span class="skill-icon"></span><span class="cd-text"></span>';
+      skillBar.appendChild(s);
+      slots = skillBar.querySelectorAll('.skill-slot');
+    }
+    while (slots.length > skills.length) {
+      skillBar.removeChild(skillBar.lastElementChild);
+      slots = skillBar.querySelectorAll('.skill-slot');
     }
 
-    for (var i = 0; i < Math.min(displaySkills.length, 4); i++) {
-      var skill = displaySkills[i];
+    for (var i = 0; i < skills.length; i++) {
+      var skill = skills[i];
       var slot = slots[i];
       if (!slot) continue;
-
       var cd = cooldowns[String(skill.id)] || 0;
+      var isAuto = !!skill.auto;
       var isActive = lastAction && lastAction.source === 'ai'
         && lastAction.skill_name === skill.name
         && (now - lastAction.time) < 2;
 
       slot.className = 'skill-slot';
+      if (isAuto) slot.classList.add('auto-skill');
+
       var iconEl = slot.querySelector('.skill-icon');
       var cdTextEl = slot.querySelector('.cd-text');
-
       if (iconEl) iconEl.textContent = skill.name;
 
       if (isActive) {
@@ -399,21 +408,9 @@ var GameWS = (function () {
         if (cdTextEl) cdTextEl.textContent = Math.ceil(cd) + 's';
       } else {
         slot.classList.add('ready');
-        if (cdTextEl) cdTextEl.textContent = 'RDY';
+        if (cdTextEl) cdTextEl.textContent = isAuto ? '\u81EA\u52A8' : '\u5C31\u7EEA';
       }
-
-      slot.title = skill.name + (cd > 0 ? ' (CD: ' + Math.ceil(cd) + 's)' : ' (Ready)');
-    }
-
-    // Hide unused slots
-    for (var j = displaySkills.length; j < slots.length; j++) {
-      if (slots[j]) {
-        slots[j].className = 'skill-slot';
-        var ic = slots[j].querySelector('.skill-icon');
-        var ct = slots[j].querySelector('.cd-text');
-        if (ic) ic.textContent = '';
-        if (ct) ct.textContent = '';
-      }
+      slot.title = skill.name + (isAuto ? ' [\u81EA\u52A8]' : '') + '\n' + (skill.description || '') + (cd > 0 ? '\nCD: ' + Math.ceil(cd) + 's' : '');
     }
   }
 
@@ -423,55 +420,86 @@ var GameWS = (function () {
     if (!container || !aiLog || !aiLog.length) return;
 
     container.innerHTML = '';
+
+    // Separate boss and player entries
+    var bossEntries = [];
+    var playerEntries = [];
     for (var i = 0; i < aiLog.length; i++) {
       var entry = aiLog[i];
       if (!entry.last_response) continue;
-
-      var role = entry.role || '';
-      var isBoss = entry.is_boss;
-      var div = document.createElement('div');
-      div.className = 'ai-log-entry ' + role + '-entry';
-
-      // Header
-      var icon = ROLE_ICONS[role] || '';
-      var name = entry.name || entry.id || role;
-      var respTime = entry.last_response.time ? _formatTimeSince(entry.last_response.time) : '';
-
-      var html = '<div class="ai-log-header">';
-      html += '<span class="ai-log-name">' + icon + ' ' + _escHtml(name) + '</span>';
-      html += '<span class="ai-log-time">' + respTime + '</span>';
-      html += '</div>';
-
-      // Query (truncated)
-      if (entry.last_query) {
-        var queryPreview = entry.last_query.substring(0, 200);
-        if (entry.last_query.length > 200) queryPreview += '...';
-        html += '<div class="ai-log-query">Q: ' + _escHtml(queryPreview) + '</div>';
+      if (entry.is_boss) {
+        bossEntries.push(entry);
+      } else {
+        playerEntries.push(entry);
       }
-
-      // Response
-      if (entry.last_response.tool_name) {
-        var skillName = entry.last_response.tool_name.replace('use_', '');
-        var target = entry.last_response.target || '';
-        html += '<div class="ai-log-response">A: ' + _escHtml(entry.last_response.tool_name) + ' \u2192 ' + _escHtml(target) + '</div>';
-      }
-
-      // Reason
-      if (entry.last_response.reason) {
-        html += '<div class="ai-log-reason">\u{1F4AD} "' + _escHtml(entry.last_response.reason) + '"</div>';
-      }
-
-      div.innerHTML = html;
-      container.appendChild(div);
     }
+
+    // Boss section
+    if (bossEntries.length > 0) {
+      var bossHeader = document.createElement('div');
+      bossHeader.className = 'ai-log-section-header boss-section';
+      bossHeader.textContent = '\u{1F525} Boss AI';
+      container.appendChild(bossHeader);
+      for (var b = 0; b < bossEntries.length; b++) {
+        _renderAiLogEntry(container, bossEntries[b]);
+      }
+    }
+
+    // Player section
+    if (playerEntries.length > 0) {
+      var playerHeader = document.createElement('div');
+      playerHeader.className = 'ai-log-section-header player-section';
+      playerHeader.textContent = '\u2694\uFE0F \u56E2\u961F AI';
+      container.appendChild(playerHeader);
+      for (var p = 0; p < playerEntries.length; p++) {
+        _renderAiLogEntry(container, playerEntries[p]);
+      }
+    }
+  }
+
+  function _renderAiLogEntry(container, entry) {
+    var role = entry.role || '';
+    var div = document.createElement('div');
+    div.className = 'ai-log-entry ' + role + '-entry';
+
+    // Header
+    var icon = ROLE_ICONS[role] || '';
+    var name = entry.name || entry.id || role;
+    var respTime = entry.last_response.time ? _formatTimeSince(entry.last_response.time) : '';
+
+    var html = '<div class="ai-log-header">';
+    html += '<span class="ai-log-name">' + icon + ' ' + _escHtml(name) + '</span>';
+    html += '<span class="ai-log-time">' + respTime + '</span>';
+    html += '</div>';
+
+    // Query (truncated)
+    if (entry.last_query) {
+      var queryPreview = entry.last_query.substring(0, 200);
+      if (entry.last_query.length > 200) queryPreview += '...';
+      html += '<div class="ai-log-query">Q: ' + _escHtml(queryPreview) + '</div>';
+    }
+
+    // Response
+    if (entry.last_response.tool_name) {
+      var target = entry.last_response.target || '';
+      html += '<div class="ai-log-response">A: ' + _escHtml(entry.last_response.tool_name) + ' \u2192 ' + _escHtml(target) + '</div>';
+    }
+
+    // Reason
+    if (entry.last_response.reason) {
+      html += '<div class="ai-log-reason">\u{1F4AD} "' + _escHtml(entry.last_response.reason) + '"</div>';
+    }
+
+    div.innerHTML = html;
+    container.appendChild(div);
   }
 
   function _formatTimeSince(timestamp) {
     var now = Date.now() / 1000;
     var diff = Math.floor(now - timestamp);
-    if (diff < 1) return 'just now';
-    if (diff < 60) return diff + 's ago';
-    return Math.floor(diff / 60) + 'm ago';
+    if (diff < 1) return '\u521A\u521A';
+    if (diff < 60) return diff + 's\u524D';
+    return Math.floor(diff / 60) + 'm\u524D';
   }
 
   function _escHtml(str) {
@@ -480,32 +508,28 @@ var GameWS = (function () {
     return div.innerHTML;
   }
 
-  /* ---- Log classification ---- */
-  function _classifyLog(text) {
+  /* ---- Log classification by role ---- */
+  function _classifyLogByRole(text) {
     if (!text) return 'system';
-    if (text.indexOf('\u{1F916}') !== -1 || text.indexOf('\u8C03\u7528') !== -1) {
-      return 'ai_decision';
-    }
-    if (text.indexOf('\u23F1') !== -1 && text.indexOf('\u8D85\u65F6') !== -1) {
-      return 'ai_decision';
-    }
-    if (text.indexOf('[God]') !== -1 || text.indexOf('[DM]') !== -1 || text.indexOf('\u4E0A\u5E1D\u6307\u4EE4') !== -1) {
-      return 'cmd';
-    }
-    if (text.indexOf('Phase') !== -1 || text.indexOf('===') !== -1 || text.indexOf('>>>') !== -1 ||
-        text.indexOf('\u72C2\u66B4') !== -1 || text.indexOf('\u706D\u4E16') !== -1 || text.indexOf('\u70C8\u7130\u98CE\u66B4') !== -1 ||
-        text.indexOf('\u53EC\u5524') !== -1 || text.indexOf('\u9677\u9631') !== -1 || text.indexOf('\u88C2\u96D9') !== -1 ||
-        text.indexOf('\u8BFB\u6761') !== -1 || text.indexOf('\u6253\u65AD') !== -1) {
-      return 'mech';
-    }
-    if (text.indexOf('\u6CBB\u7597') !== -1 || text.indexOf('\u6062\u590D') !== -1 || text.indexOf('\u590D\u6D3B') !== -1) {
-      return 'heal';
-    }
-    if (text.indexOf('\u4F24\u5BB3') !== -1 || text.indexOf('\u547D\u4E2D') !== -1 || text.indexOf('\u706C\u70E7') !== -1 ||
-        text.indexOf('\u653B\u51FB') !== -1 || text.indexOf('\u7206\u70B8') !== -1 || text.indexOf('\u9635\u4EA1') !== -1 ||
-        text.indexOf('\u4F7F\u7528') !== -1) {
-      return 'damage';
-    }
+    // Commands
+    if (/\[God\]|\u4E0A\u5E1D\u6307\u4EE4|\[DM\]/.test(text)) return 'cmd';
+    // System
+    if (/===|>>>|\u6218\u6597\u5F00\u59CB|\u6218\u6597\u7ED3\u675F|System|connected/.test(text)) return 'system';
+    // Role detection (check first 30 chars, then full text)
+    var head = text.substring(0, 30);
+    if (/\u62C9\u683C\u7EB3\u7F57\u65AF|\u7194\u706B\u4E4B\u738B|boss|BOSS|\u7194\u5CA9\u5143\u7D20|Phase|\[P[123]\]|\u72C2\u66B4/.test(head)) return 'boss';
+    if (/\u514B\u52B3\u5FB7|\u5723\u9A91\u58EB|tank/.test(head)) return 'tank';
+    if (/\u7D22\u5948\u7279|\u7267\u5E08|healer/.test(head)) return 'healer';
+    if (/\u6B27\u5E15\u65AF|\u6CD5\u5E08|mage/.test(head)) return 'mage';
+    if (/\u6D77\u9177|\u76D7\u8D3C|rogue/.test(head)) return 'rogue';
+    if (/\u963F\u5C14\u6CD5|\u730E\u4EBA|hunter/.test(head)) return 'hunter';
+    // Full text fallback
+    if (/\u62C9\u683C\u7EB3\u7F57\u65AF|boss|\u7194\u5CA9|\u88C2\u96D9|\u9677\u9631|\u706D\u4E16|\u70C8\u7130\u98CE\u66B4|\u53EC\u5524|\u72C2\u66B4|Phase/.test(text)) return 'boss';
+    if (/\u514B\u52B3\u5FB7|\u5723\u9A91\u58EB|\u5632\u8BBD|\u76FE\u5899|\u82F1\u52C7\u6253\u51FB|\u7834\u7532/.test(text)) return 'tank';
+    if (/\u7D22\u5948\u7279|\u7267\u5E08|\u6CBB\u7597\u672F|\u7FA4\u4F53\u6CBB\u7597|\u9A71\u6563|\u590D\u6D3B/.test(text)) return 'healer';
+    if (/\u6B27\u5E15\u65AF|\u6CD5\u5E08|\u706B\u7403|\u66B4\u98CE\u96EA|\u51B0\u51BB|\u6CD5\u672F\u5C4F\u969C/.test(text)) return 'mage';
+    if (/\u6D77\u9177|\u76D7\u8D3C|\u80CC\u523A|\u6BD2\u5203|\u95EA\u907F|\u81F4\u547D\u8FDE\u51FB/.test(text)) return 'rogue';
+    if (/\u963F\u5C14\u6CD5|\u730E\u4EBA|\u5C04\u51FB|\u591A\u91CD|\u5370\u8BB0|\u6CBB\u7597\u4E4B\u98CE/.test(text)) return 'hunter';
     return 'system';
   }
 
@@ -629,11 +653,8 @@ var GameWS = (function () {
             for (var i = 0; i < logs.length; i++) {
               var entry = logs[i];
               var logText = entry.text || entry.message || '';
-              var logType = entry.type || null;
               if (logText) {
-                var finalType = (logType === 'ai_decision' || logType === 'ai_timeout')
-                  ? logType
-                  : _classifyLog(logText);
+                var finalType = _classifyLogByRole(logText);
                 _addLog(logText, finalType, msg.data.game_time);
               }
             }
@@ -643,10 +664,7 @@ var GameWS = (function () {
         _emit('combat_log', msg.data);
         if (msg.data) {
           var text = msg.data.text || msg.data.message || JSON.stringify(msg.data);
-          var serverType = msg.data.type || null;
-          var cType = (serverType === 'ai_decision' || serverType === 'ai_timeout')
-            ? serverType
-            : _classifyLog(text);
+          var cType = _classifyLogByRole(text);
           _addLog(text, cType, 0);
         }
       } else if (type === 'game_over') {
@@ -654,7 +672,7 @@ var GameWS = (function () {
         if (msg.data) {
           var result = msg.data.result || '';
           var message = msg.data.message || '';
-          _addLog('=== ' + (result === 'victory' ? 'VICTORY!' : 'DEFEAT') + ' === ' + message, 'mech', 0);
+          _addLog('=== ' + (result === 'victory' ? '\u80DC\u5229!' : '\u5931\u8D25') + ' === ' + message, 'system', 0);
           _updateGameStatus(false, result);
         }
       } else if (type === 'game_control') {
@@ -662,13 +680,13 @@ var GameWS = (function () {
           var action = msg.data.action;
           if (action === 'started') {
             _updateGameStatus(true, null);
-            _addLog('>>> \u6218\u6597\u5F00\u59CB! <<<', 'mech', 0);
+            _addLog('>>> \u6218\u6597\u5F00\u59CB! <<<', 'system', 0);
           } else if (action === 'stopped') {
             _updateGameStatus(false, 'stopped');
           } else if (action === 'restarted') {
             _clearLog();
             _updateGameStatus(true, null);
-            _addLog('>>> \u91CD\u65B0\u5F00\u59CB! <<<', 'mech', 0);
+            _addLog('>>> \u91CD\u65B0\u5F00\u59CB! <<<', 'system', 0);
           }
         }
       }
@@ -795,13 +813,16 @@ var GameWS = (function () {
       });
     }
 
-    // Tactical quick command buttons (send immediately)
+    // Tactical quick command buttons (send immediately, with visual feedback)
     var quickBtns = document.querySelectorAll('.quick-btn');
     for (var q = 0; q < quickBtns.length; q++) {
       quickBtns[q].addEventListener('click', function () {
         var cmd = this.getAttribute('data-cmd');
         if (cmd) {
           sendGodCommand(cmd);
+          this.classList.add('sent');
+          var btnRef = this;
+          setTimeout(function() { btnRef.classList.remove('sent'); }, 300);
         }
       });
     }
