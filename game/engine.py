@@ -232,8 +232,6 @@ class GameEngine:
     def submit_god_command(self, command: str) -> None:
         """Submit a god/DM command."""
         self._god_commands.append(command)
-        self.god_command_text = command
-        self._god_command_time = self.game_time
 
     def get_character(self, character_id: str) -> Character | None:
         return self.characters.get(character_id)
@@ -668,6 +666,7 @@ class GameEngine:
         else:
             # Unrecognized commands are treated as natural language broadcast
             self.god_command_text = command
+            self._god_command_time = self.game_time
             self.event_bus.emit(COMBAT_LOG, {
                 "message": f"[团长指令] {command}",
             })

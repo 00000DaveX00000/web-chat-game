@@ -83,7 +83,7 @@ HEAL = SkillDef(
     role="healer",
     cooldown=0,
     mana_cost=120,
-    cast_time=2.0,
+    cast_time=1.5,
     target_type="ally",
     description="单体治疗800HP",
     effects={"type": "heal", "base_heal": 800},
@@ -94,7 +94,7 @@ CIRCLE_OF_HEAL = SkillDef(
     id=202,
     name="治疗之环",
     role="healer",
-    cooldown=6,
+    cooldown=4,
     mana_cost=250,
     cast_time=0,
     target_type="ally_all",
@@ -106,7 +106,7 @@ DISPEL = SkillDef(
     id=203,
     name="驱散",
     role="healer",
-    cooldown=4,
+    cooldown=2,
     mana_cost=80,
     cast_time=0,
     target_type="ally",
@@ -146,7 +146,7 @@ BLIZZARD = SkillDef(
     id=302,
     name="暴风雪",
     role="mage",
-    cooldown=8,
+    cooldown=5,
     mana_cost=200,
     cast_time=0,
     target_type="enemy_all",
@@ -230,6 +230,18 @@ DEADLY_COMBO = SkillDef(
     effects={"type": "special", "special_id": "deadly_combo", "damage_per_energy": 1.5},
 )
 
+FAN_OF_KNIVES = SkillDef(
+    id=405,
+    name="刀扇",
+    role="rogue",
+    cooldown=4,
+    mana_cost=60,
+    cast_time=0,
+    target_type="enemy_all",
+    description="AOE造成250伤害",
+    effects={"type": "damage_aoe", "base_damage": 250},
+)
+
 # ---------------------------------------------------------------------------
 # Hunter skills
 # ---------------------------------------------------------------------------
@@ -250,7 +262,7 @@ MULTI_SHOT = SkillDef(
     id=502,
     name="多重射击",
     role="hunter",
-    cooldown=6,
+    cooldown=4,
     mana_cost=100,
     cast_time=0,
     target_type="enemy_all",
@@ -426,7 +438,7 @@ ALL_SKILLS: list[SkillDef] = [
     TAUNT, SHIELD_WALL, SUNDER_ARMOR, HEROIC_STRIKE,
     HEAL, CIRCLE_OF_HEAL, DISPEL, RESURRECT,
     FIREBALL, BLIZZARD, FROST_NOVA, SPELL_BARRIER,
-    BACKSTAB, POISON_BLADE, EVASION, DEADLY_COMBO,
+    BACKSTAB, POISON_BLADE, EVASION, DEADLY_COMBO, FAN_OF_KNIVES,
     AIMED_SHOT, MULTI_SHOT, HUNTERS_MARK, HEALING_WIND,
     BOSS_AUTO_ATTACK, BOSS_CLEAVE, BOSS_MAGMA_BLAST, BOSS_FIRESTORM,
     BOSS_SUMMON, BOSS_FISSURE, BOSS_APOCALYPSE, BOSS_TRAP,

@@ -471,9 +471,6 @@ def _format_boss_state(state: dict[str, Any]) -> str:
     if god_cmd:
         lines.append(f"== 截获的敌方团长指令(故意针对!) ==\n{god_cmd}\n根据这个指令，故意做出针对性的行动来打乱他们的计划！\n")
 
-    if is_boss:
-        lines.append("请根据以上战场状态，选择2-3个技能工具同时执行(多技能连击)！积极攻击！不要只用一个技能！reason字段用你的暴君语气说话！")
-    else:
-        lines.append("请根据以上战场状态，选择一个技能工具来执行你的决策。reason字段用你的角色性格说话！")
+    lines.append("请根据以上战场状态，选择2-3个技能工具同时执行(多技能连击)！积极攻击！不要只用一个技能！reason字段用你的暴君语气说话！")
 
     return "\n".join(lines)
