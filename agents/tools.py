@@ -30,7 +30,7 @@ def skill_to_tool(skill: SkillDef, is_boss: bool = False) -> dict:
                 "description": "目标ID. 可选: boss, tank, healer, mage, rogue, hunter, add_0, add_1...",
                 "enum": [
                     "boss", "tank", "healer", "mage", "rogue", "hunter",
-                    "add_0", "add_1", "add_2", "add_3",
+                    "add_0", "add_1", "add_2", "add_3", "add_4", "add_5",
                 ],
             }
         required.insert(0, "target")

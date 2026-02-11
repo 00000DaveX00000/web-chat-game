@@ -5,8 +5,8 @@ llm_defaults:
   api_key_env: ANTHROPIC_AUTH_TOKEN
   model: qwen-plus
   temperature: 0.3
-  max_tokens: 150
-  timeout: 10.0
+  max_tokens: 500
+  timeout: 30.0
 
 members:
   boss:

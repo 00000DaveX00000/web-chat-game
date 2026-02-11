@@ -219,6 +219,11 @@ class Character:
         """Heal the character. Returns actual healing done."""
         if not self.alive:
             return 0
+        # Check for healing reduction debuffs (e.g. 禁疗之焰)
+        for d in self.debuffs:
+            reduction = d.params.get("heal_reduction", 0)
+            if reduction > 0:
+                amount = int(amount * (1 - reduction))
         actual = min(self.max_hp - self.hp, max(0, amount))
         self.hp += actual
         return actual

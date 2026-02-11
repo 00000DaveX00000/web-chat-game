@@ -1,7 +1,7 @@
 /**
- * WebSocket client for the AI Raid Battle game (V4).
- * Handles boss-strip + 5-player char-strip layout, AI Log panel,
- * tactical commands, and battle log filtering by role.
+ * WebSocket client for the AI Raid Battle game (V5).
+ * Three-column layout: Boss fused into Header, 5 vertical char cards,
+ * 5 player AI chat windows. No more Boss card or AI log panel.
  */
 var GameWS = (function () {
   'use strict';
@@ -27,11 +27,11 @@ var GameWS = (function () {
 
   var ROLE_NAMES = {
     boss: 'BOSS',
-    tank: '\u5766\u514B',
-    healer: '\u6CBB\u7597',
-    mage: '\u6CD5\u5E08',
-    rogue: '\u76D7\u8D3C',
-    hunter: '\u730E\u4EBA'
+    tank: '坦克',
+    healer: '治疗',
+    mage: '法师',
+    rogue: '盗贼',
+    hunter: '猎人'
   };
 
   function _getUrl() {
@@ -45,7 +45,7 @@ var GameWS = (function () {
     _connected = connected;
     var el = document.getElementById('ws-status');
     if (el) {
-      el.textContent = connected ? '\u5DF2\u8FDE\u63A5' : '\u672A\u8FDE\u63A5';
+      el.textContent = connected ? '已连接' : '未连接';
       el.className = connected ? 'connected' : '';
     }
   }
@@ -59,13 +59,13 @@ var GameWS = (function () {
 
     if (badge) {
       if (result && result !== 'stopped') {
-        badge.textContent = result === 'victory' ? '\u80DC\u5229!' : '\u5931\u8D25';
+        badge.textContent = result === 'victory' ? '胜利!' : '失败';
         badge.className = result === 'victory' ? 'victory' : 'defeat';
       } else if (running) {
-        badge.textContent = '\u6218\u6597\u4E2D';
+        badge.textContent = '战斗中';
         badge.className = 'fighting';
       } else {
-        badge.textContent = '\u7B49\u5F85\u4E2D';
+        badge.textContent = '等待中';
         badge.className = '';
       }
     }
@@ -88,125 +88,85 @@ var GameWS = (function () {
   function _updatePhaseBadge(phase) {
     var el = document.getElementById('phase-badge');
     if (!el) return;
-    var names = { 1: 'P1 \u89C9\u9192', 2: 'P2 \u72C2\u6012', 3: 'P3 \u706D\u4E16' };
+    var names = { 1: 'P1 觉醒', 2: 'P2 狂怒', 3: 'P3 灭世' };
     el.textContent = names[phase] || 'P' + phase;
     el.className = phase >= 3 ? 'p3' : phase >= 2 ? 'p2' : '';
   }
 
-  /* ---- Header boss HP ---- */
-  function _updateHeaderBossHp(boss) {
-    var fill = document.getElementById('header-boss-hp-fill');
-    var text = document.getElementById('header-boss-hp-text');
-    if (!fill || !text || !boss) return;
-    var pct = boss.hp_percent !== undefined ? boss.hp_percent : (boss.hp / boss.max_hp * 100);
-    fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-    text.textContent = Math.round(pct) + '%';
-  }
-
-  /* ---- Boss Card (new structure) ---- */
-  function _updateBossCard(bossCard) {
+  /* ---- Boss Header (fused: HP + AI decision + cast + badges) ---- */
+  function _updateBossHeader(bossCard, bossAiEntry) {
     if (!bossCard) return;
-    var card = document.getElementById('card-boss');
-    if (!card) return;
 
-    var alive = bossCard.alive !== false && bossCard.hp > 0;
-    if (alive) {
-      card.classList.remove('dead');
-    } else {
-      card.classList.add('dead');
-    }
-
-    // Name (new: .boss-name instead of .card-name)
-    var nameEl = card.querySelector('.boss-name');
-    if (nameEl) nameEl.textContent = bossCard.name || 'BOSS';
-
-    // Source tag
-    _updateSourceTag(card, bossCard);
+    // Boss name
+    var nameEl = document.getElementById('header-boss-name');
+    if (nameEl) nameEl.textContent = bossCard.name || '拉格纳罗斯';
 
     // HP bar
     var hpPct = bossCard.max_hp > 0 ? (bossCard.hp / bossCard.max_hp) : 0;
-    var hpFill = card.querySelector('.hp-fill');
-    var hpText = card.querySelector('.boss-hp-text');
-    if (hpFill) {
-      hpFill.style.width = (hpPct * 100) + '%';
-      hpFill.className = 'bar-fill hp-fill' + (hpPct > 0.6 ? '' : hpPct > 0.3 ? ' mid' : ' low');
-    }
-    if (hpText) {
-      var pctDisplay = Math.round(hpPct * 100);
-      hpText.textContent = bossCard.hp + '/' + bossCard.max_hp + ' (' + pctDisplay + '%)';
-    }
+    var fill = document.getElementById('header-boss-hp-fill');
+    var text = document.getElementById('header-boss-hp-text');
+    if (fill) fill.style.width = Math.max(0, Math.min(100, hpPct * 100)) + '%';
+    if (text) text.textContent = bossCard.hp + '/' + bossCard.max_hp + ' (' + Math.round(hpPct * 100) + '%)';
 
-    // Boss badges (phase, adds, enrage) - Chinese text
-    var badgesEl = card.querySelector('.boss-badges');
-    if (badgesEl) {
-      var bhtml = '';
-      bhtml += '<span class="boss-badge phase-badge">P' + (bossCard.phase || 1) + '</span>';
-      var addsCount = bossCard.adds_count || 0;
-      if (addsCount > 0) {
-        bhtml += '<span class="boss-badge adds-badge">\u5C0F\u602A:' + addsCount + '</span>';
-      }
-      if (bossCard.enraged) {
-        bhtml += '<span class="boss-badge enrage-badge">\u72C2\u66B4!</span>';
-      } else if (bossCard.enrage_timer !== null && bossCard.enrage_timer !== undefined) {
-        bhtml += '<span class="boss-badge enrage-timer-badge">\u72C2\u66B4:' + Math.ceil(bossCard.enrage_timer) + 's</span>';
-      }
-      badgesEl.innerHTML = bhtml;
-    }
-
-    // Skill slots (shared function)
-    _updateSkillSlots(card, bossCard);
-
-    // Cast bar
-    var castBarEl = card.querySelector('.card-cast-bar');
-    if (castBarEl) {
-      if (bossCard.casting) {
-        castBarEl.classList.remove('hidden');
-        var castFillEl = castBarEl.querySelector('.card-cast-fill');
-        var castTextEl = castBarEl.querySelector('.card-cast-text');
-        var totalCast = bossCard.casting.skill_name === '\u706D\u4E16\u4E4B\u708E' ? 3.0 : 2.0;
-        var progress = Math.max(0, 1 - bossCard.casting.remaining / totalCast) * 100;
-        if (castFillEl) castFillEl.style.width = progress + '%';
-        if (castTextEl) castTextEl.textContent = bossCard.casting.skill_name + ' ' + bossCard.casting.remaining.toFixed(1) + 's';
-      } else {
-        castBarEl.classList.add('hidden');
-      }
-    }
-
-    // Action / Reason / Buffs (in .boss-row-bottom)
-    var actionEl = card.querySelector('.card-action');
+    // Boss AI decision (Row 2) — use skill_name, not tool_name
+    var actionEl = document.getElementById('boss-ai-action');
+    var reasonEl = document.getElementById('boss-ai-reason');
     if (actionEl) {
       if (bossCard.last_action && bossCard.last_action.skill_name) {
         var src = bossCard.last_action.source || '';
         var srcIcon = src === 'ai' ? '\u{1F916}' : src === 'timeout' ? '\u23F1' : '\u2699';
-        actionEl.textContent = srcIcon + ' ' + bossCard.last_action.skill_name + ' \u2192 ' + (bossCard.last_action.target || '');
-        actionEl.className = 'card-action source-' + src;
+        var targetDisp = _targetName(bossCard.last_action.target || '');
+        actionEl.textContent = srcIcon + ' ' + bossCard.last_action.skill_name + (targetDisp ? ' \u2192 ' + targetDisp : '');
       } else {
         actionEl.textContent = '';
-        actionEl.className = 'card-action';
       }
     }
-    var reasonEl = card.querySelector('.card-reason');
     if (reasonEl) {
       if (bossCard.last_action && bossCard.last_action.reason) {
         reasonEl.textContent = '\u{1F4AD} "' + bossCard.last_action.reason + '"';
+      } else if (bossAiEntry && bossAiEntry.last_response && bossAiEntry.last_response.reason) {
+        reasonEl.textContent = '\u{1F4AD} "' + bossAiEntry.last_response.reason + '"';
       } else {
         reasonEl.textContent = '';
       }
     }
 
-    // Buffs/Debuffs
-    var buffsEl = card.querySelector('.card-buffs');
-    if (buffsEl) {
-      var bhtml2 = '';
-      var debuffs = bossCard.debuffs || [];
-      for (var d = 0; d < debuffs.length; d++) {
-        bhtml2 += '<span class="debuff-item">' + debuffs[d].name + '(' + Math.ceil(debuffs[d].duration) + 's) </span>';
+    // Cast indicator (Row 2)
+    var castEl = document.getElementById('header-cast-indicator');
+    if (castEl) {
+      if (bossCard.casting) {
+        castEl.classList.remove('hidden');
+        castEl.textContent = '\u23F3' + bossCard.casting.skill_name + ' ' + bossCard.casting.remaining.toFixed(1) + 's';
+      } else {
+        castEl.classList.add('hidden');
       }
-      buffsEl.innerHTML = bhtml2 || '';
+    }
+
+    // Boss badges (Row 2)
+    var badgesEl = document.getElementById('boss-badges');
+    if (badgesEl) {
+      var bhtml = '';
+      var addsCount = bossCard.adds_count || 0;
+      if (addsCount > 0) {
+        bhtml += '<span class="boss-badge adds-badge">小怪:' + addsCount + '</span>';
+      }
+      // Fire shield indicator
+      var buffs = bossCard.buffs || [];
+      for (var bi = 0; bi < buffs.length; bi++) {
+        if (buffs[bi].id === 'fire_shield') {
+          bhtml += '<span class="boss-badge fire-shield-badge">🔥盾:' + Math.ceil(buffs[bi].duration) + 's</span>';
+        }
+      }
+      if (bossCard.enraged) {
+        bhtml += '<span class="boss-badge enrage-badge">狂暴!</span>';
+      } else if (bossCard.enrage_timer !== null && bossCard.enrage_timer !== undefined) {
+        bhtml += '<span class="boss-badge enrage-timer-badge">狂暴:' + Math.ceil(bossCard.enrage_timer) + 's</span>';
+      }
+      badgesEl.innerHTML = bhtml;
     }
   }
 
-  /* ---- Character Cards (5 players) ---- */
+  /* ---- Character Cards (5 players, no instruction/action/reason - moved to AI chat) ---- */
   function _updateCharCards(characters) {
     if (!characters) return;
     var roles = ['tank', 'healer', 'mage', 'rogue', 'hunter'];
@@ -272,53 +232,6 @@ var GameWS = (function () {
       }
     }
 
-    // Instruction (god command highlight with flash)
-    var instrEl = card.querySelector('.card-instruction');
-    if (instrEl) {
-      var instrText = '';
-      if (c.last_action && c.last_action.instruction) {
-        instrText = c.last_action.instruction;
-      }
-      if (instrText) {
-        var oldText = instrEl.getAttribute('data-last') || '';
-        instrEl.textContent = '\u{1F4E5} \u6307\u4EE4: "' + instrText + '"';
-        instrEl.style.display = '';
-        if (instrText !== oldText) {
-          instrEl.classList.remove('flash');
-          void instrEl.offsetWidth; // force reflow
-          instrEl.classList.add('flash');
-          instrEl.setAttribute('data-last', instrText);
-        }
-      } else {
-        instrEl.textContent = '';
-        instrEl.style.display = 'none';
-      }
-    }
-
-    // Action
-    var actionEl = card.querySelector('.card-action');
-    if (actionEl) {
-      if (c.last_action && c.last_action.skill_name) {
-        var actionSource = c.last_action.source || '';
-        var sourceIcon = actionSource === 'ai' ? '\u{1F916}' : actionSource === 'timeout' ? '\u23F1' : '\u2699';
-        actionEl.textContent = sourceIcon + ' ' + c.last_action.skill_name + ' \u2192 ' + (c.last_action.target || '');
-        actionEl.className = 'card-action source-' + actionSource;
-      } else {
-        actionEl.textContent = '';
-        actionEl.className = 'card-action';
-      }
-    }
-
-    // Reason
-    var reasonEl = card.querySelector('.card-reason');
-    if (reasonEl) {
-      if (c.last_action && c.last_action.reason) {
-        reasonEl.textContent = '\u{1F4AD} "' + c.last_action.reason + '"';
-      } else {
-        reasonEl.textContent = '';
-      }
-    }
-
     // Buffs + Debuffs
     var buffsEl = card.querySelector('.card-buffs');
     if (buffsEl) {
@@ -343,24 +256,24 @@ var GameWS = (function () {
     var alive = charData.alive !== false && charData.hp > 0;
 
     if (!alive) {
-      tag.textContent = '\u2620 \u5DF2\u9635\u4EA1';
+      tag.textContent = '☠ 已阵亡';
       tag.className = 'source-tag dead';
     } else if (la && la.source === 'ai') {
-      tag.textContent = '\u{1F916} AI\u51B3\u7B56';
+      tag.textContent = '🤖 AI';
       tag.className = 'source-tag ai-decision';
     } else if (la && la.source === 'timeout') {
-      tag.textContent = '\u23F1 \u8D85\u65F6';
+      tag.textContent = '⏱ 超时';
       tag.className = 'source-tag timeout';
     } else if (la && la.source === 'auto') {
-      tag.textContent = '\u2699 \u81EA\u52A8';
+      tag.textContent = '⚙ 自动';
       tag.className = 'source-tag auto';
     } else {
-      tag.textContent = '\u23F3 \u7B49\u5F85\u4E2D';
+      tag.textContent = '⏳ 等待';
       tag.className = 'source-tag waiting';
     }
   }
 
-  /* ---- Skill Slots (dynamic, show ALL skills) ---- */
+  /* ---- Skill Slots (dynamic) ---- */
   function _updateSkillSlots(card, charData) {
     var skills = charData.skills || [];
     var cooldowns = charData.cooldowns || {};
@@ -369,7 +282,6 @@ var GameWS = (function () {
     if (!skillBar) return;
     var now = Date.now() / 1000;
 
-    // Dynamically adjust slot count
     var slots = skillBar.querySelectorAll('.skill-slot');
     while (slots.length < skills.length) {
       var s = document.createElement('div');
@@ -402,104 +314,163 @@ var GameWS = (function () {
 
       if (isActive) {
         slot.classList.add('active-tool-call');
-        if (cdTextEl) cdTextEl.textContent = '\u2605AI';
+        if (cdTextEl) cdTextEl.textContent = '★AI';
       } else if (cd > 0) {
         slot.classList.add('on-cooldown');
         if (cdTextEl) cdTextEl.textContent = Math.ceil(cd) + 's';
       } else {
         slot.classList.add('ready');
-        if (cdTextEl) cdTextEl.textContent = isAuto ? '\u81EA\u52A8' : '\u5C31\u7EEA';
+        if (cdTextEl) cdTextEl.textContent = isAuto ? '自动' : '就绪';
       }
-      slot.title = skill.name + (isAuto ? ' [\u81EA\u52A8]' : '') + '\n' + (skill.description || '') + (cd > 0 ? '\nCD: ' + Math.ceil(cd) + 's' : '');
+      slot.title = skill.name + (isAuto ? ' [自动]' : '') + '\n' + (skill.description || '') + (cd > 0 ? '\nCD: ' + Math.ceil(cd) + 's' : '');
     }
   }
 
-  /* ---- AI Log Panel ---- */
-  function _updateAiLog(aiLog) {
-    var container = document.getElementById('ai-log');
-    if (!container || !aiLog || !aiLog.length) return;
+  /* ---- Target display name mapping ---- */
+  var TARGET_NAMES = {
+    boss: 'Boss', tank: '坦克', healer: '治疗',
+    mage: '法师', rogue: '盗贼', hunter: '猎人'
+  };
 
-    container.innerHTML = '';
+  function _targetName(t) {
+    if (!t) return '';
+    if (TARGET_NAMES[t]) return TARGET_NAMES[t];
+    if (t.indexOf('add_') === 0) return '小怪' + t.replace('add_', '#');
+    return t;
+  }
 
-    // Separate boss and player entries
-    var bossEntries = [];
-    var playerEntries = [];
+  /* ---- AI Chat Windows (5 player windows + Boss strategy panel) ---- */
+  function _updateAiChatWindows(aiLog) {
+    if (!aiLog || !aiLog.length) return;
+
+    var bossAiEntry = null;
+
     for (var i = 0; i < aiLog.length; i++) {
       var entry = aiLog[i];
-      if (!entry.last_response) continue;
+      var isQuerying = !!entry.querying;
+
       if (entry.is_boss) {
-        bossEntries.push(entry);
-      } else {
-        playerEntries.push(entry);
+        bossAiEntry = entry;
+        if (entry.last_response) {
+          _updateBossStrategyPanel(entry);
+        }
+        // Boss querying indicator on strategy panel
+        var bossPanel = document.getElementById('boss-strategy-panel');
+        if (bossPanel) {
+          if (isQuerying) {
+            bossPanel.classList.add('querying');
+          } else {
+            bossPanel.classList.remove('querying');
+          }
+        }
+        continue;
+      }
+
+      // Player AI -> update corresponding chat window + char card
+      var role = entry.role || '';
+      var window_el = document.getElementById('ai-chat-' + role);
+      var card_el = document.getElementById('card-' + role);
+
+      // Querying state — toggle class on both AI chat window and char card
+      if (window_el) {
+        if (isQuerying) {
+          window_el.classList.add('querying');
+        } else {
+          window_el.classList.remove('querying');
+        }
+      }
+      if (card_el) {
+        if (isQuerying) {
+          card_el.classList.add('querying');
+        } else {
+          card_el.classList.remove('querying');
+        }
+      }
+
+      if (!entry.last_response || !window_el) continue;
+
+      // Time
+      var timeEl = window_el.querySelector('.ai-chat-time');
+      if (timeEl) {
+        timeEl.textContent = entry.last_response.time ? _formatTimeSince(entry.last_response.time) : '';
+      }
+
+      // Query (more info, multi-line friendly, smaller font)
+      var queryEl = window_el.querySelector('.ai-chat-query');
+      if (queryEl) {
+        if (entry.last_query) {
+          var queryPreview = entry.last_query.substring(0, 800);
+          if (entry.last_query.length > 800) queryPreview += '...';
+          queryEl.textContent = 'Q: ' + queryPreview;
+        } else {
+          queryEl.textContent = '';
+        }
+      }
+
+      // Response — show skill name + target name (not tool_name)
+      var respEl = window_el.querySelector('.ai-chat-response');
+      if (respEl) {
+        var skillName = entry.last_response.skill_name || entry.last_response.tool_name || '';
+        if (skillName) {
+          var target = entry.last_response.target || '';
+          var targetDisplay = _targetName(target);
+          respEl.innerHTML = 'A: <span class="skill-label">' + _escHtml(skillName) + '</span>'
+            + (targetDisplay ? ' \u2192 <span class="target-label">' + _escHtml(targetDisplay) + '</span>' : '');
+        } else {
+          respEl.innerHTML = '';
+        }
+      }
+
+      // Reason — multi-line with word wrap
+      var reasonEl = window_el.querySelector('.ai-chat-reason');
+      if (reasonEl) {
+        if (entry.last_response.reason) {
+          reasonEl.textContent = '\u{1F4AD} "' + entry.last_response.reason + '"';
+        } else {
+          reasonEl.textContent = '';
+        }
       }
     }
 
-    // Boss section
-    if (bossEntries.length > 0) {
-      var bossHeader = document.createElement('div');
-      bossHeader.className = 'ai-log-section-header boss-section';
-      bossHeader.textContent = '\u{1F525} Boss AI';
-      container.appendChild(bossHeader);
-      for (var b = 0; b < bossEntries.length; b++) {
-        _renderAiLogEntry(container, bossEntries[b]);
-      }
-    }
-
-    // Player section
-    if (playerEntries.length > 0) {
-      var playerHeader = document.createElement('div');
-      playerHeader.className = 'ai-log-section-header player-section';
-      playerHeader.textContent = '\u2694\uFE0F \u56E2\u961F AI';
-      container.appendChild(playerHeader);
-      for (var p = 0; p < playerEntries.length; p++) {
-        _renderAiLogEntry(container, playerEntries[p]);
-      }
-    }
+    return bossAiEntry;
   }
 
-  function _renderAiLogEntry(container, entry) {
-    var role = entry.role || '';
-    var div = document.createElement('div');
-    div.className = 'ai-log-entry ' + role + '-entry';
+  /* ---- Boss Strategy Panel (prominent display in left column) ---- */
+  function _updateBossStrategyPanel(bossEntry) {
+    var actionEl = document.getElementById('boss-strategy-action');
+    var reasonEl = document.getElementById('boss-strategy-reason');
+    if (!actionEl || !reasonEl) return;
 
-    // Header
-    var icon = ROLE_ICONS[role] || '';
-    var name = entry.name || entry.id || role;
-    var respTime = entry.last_response.time ? _formatTimeSince(entry.last_response.time) : '';
-
-    var html = '<div class="ai-log-header">';
-    html += '<span class="ai-log-name">' + icon + ' ' + _escHtml(name) + '</span>';
-    html += '<span class="ai-log-time">' + respTime + '</span>';
-    html += '</div>';
-
-    // Query (truncated)
-    if (entry.last_query) {
-      var queryPreview = entry.last_query.substring(0, 200);
-      if (entry.last_query.length > 200) queryPreview += '...';
-      html += '<div class="ai-log-query">Q: ' + _escHtml(queryPreview) + '</div>';
+    var resp = bossEntry.last_response;
+    if (!resp) {
+      actionEl.textContent = '';
+      reasonEl.textContent = '';
+      return;
     }
 
-    // Response
-    if (entry.last_response.tool_name) {
-      var target = entry.last_response.target || '';
-      html += '<div class="ai-log-response">A: ' + _escHtml(entry.last_response.tool_name) + ' \u2192 ' + _escHtml(target) + '</div>';
+    var skillName = resp.skill_name || resp.tool_name || '';
+    var target = resp.target || '';
+    var targetDisplay = _targetName(target);
+
+    if (skillName) {
+      actionEl.textContent = '\u{1F916} ' + skillName + (targetDisplay ? ' \u2192 ' + targetDisplay : '');
+    } else {
+      actionEl.textContent = '';
     }
 
-    // Reason
-    if (entry.last_response.reason) {
-      html += '<div class="ai-log-reason">\u{1F4AD} "' + _escHtml(entry.last_response.reason) + '"</div>';
+    if (resp.reason) {
+      reasonEl.textContent = '\u{1F4AD} ' + resp.reason;
+    } else {
+      reasonEl.textContent = '';
     }
-
-    div.innerHTML = html;
-    container.appendChild(div);
   }
 
   function _formatTimeSince(timestamp) {
     var now = Date.now() / 1000;
     var diff = Math.floor(now - timestamp);
-    if (diff < 1) return '\u521A\u521A';
-    if (diff < 60) return diff + 's\u524D';
-    return Math.floor(diff / 60) + 'm\u524D';
+    if (diff < 1) return '刚刚';
+    if (diff < 60) return diff + 's前';
+    return Math.floor(diff / 60) + 'm前';
   }
 
   function _escHtml(str) {
@@ -511,25 +482,21 @@ var GameWS = (function () {
   /* ---- Log classification by role ---- */
   function _classifyLogByRole(text) {
     if (!text) return 'system';
-    // Commands
-    if (/\[God\]|\u4E0A\u5E1D\u6307\u4EE4|\[DM\]/.test(text)) return 'cmd';
-    // System
-    if (/===|>>>|\u6218\u6597\u5F00\u59CB|\u6218\u6597\u7ED3\u675F|System|connected/.test(text)) return 'system';
-    // Role detection (check first 30 chars, then full text)
+    if (/\[God\]|团长指令|\[DM\]/.test(text)) return 'cmd';
+    if (/===|>>>|战斗开始|战斗结束|System|connected/.test(text)) return 'system';
     var head = text.substring(0, 30);
-    if (/\u62C9\u683C\u7EB3\u7F57\u65AF|\u7194\u706B\u4E4B\u738B|boss|BOSS|\u7194\u5CA9\u5143\u7D20|Phase|\[P[123]\]|\u72C2\u66B4/.test(head)) return 'boss';
-    if (/\u514B\u52B3\u5FB7|\u5723\u9A91\u58EB|tank/.test(head)) return 'tank';
-    if (/\u7D22\u5948\u7279|\u7267\u5E08|healer/.test(head)) return 'healer';
-    if (/\u6B27\u5E15\u65AF|\u6CD5\u5E08|mage/.test(head)) return 'mage';
-    if (/\u6D77\u9177|\u76D7\u8D3C|rogue/.test(head)) return 'rogue';
-    if (/\u963F\u5C14\u6CD5|\u730E\u4EBA|hunter/.test(head)) return 'hunter';
-    // Full text fallback
-    if (/\u62C9\u683C\u7EB3\u7F57\u65AF|boss|\u7194\u5CA9|\u88C2\u96D9|\u9677\u9631|\u706D\u4E16|\u70C8\u7130\u98CE\u66B4|\u53EC\u5524|\u72C2\u66B4|Phase/.test(text)) return 'boss';
-    if (/\u514B\u52B3\u5FB7|\u5723\u9A91\u58EB|\u5632\u8BBD|\u76FE\u5899|\u82F1\u52C7\u6253\u51FB|\u7834\u7532/.test(text)) return 'tank';
-    if (/\u7D22\u5948\u7279|\u7267\u5E08|\u6CBB\u7597\u672F|\u7FA4\u4F53\u6CBB\u7597|\u9A71\u6563|\u590D\u6D3B/.test(text)) return 'healer';
-    if (/\u6B27\u5E15\u65AF|\u6CD5\u5E08|\u706B\u7403|\u66B4\u98CE\u96EA|\u51B0\u51BB|\u6CD5\u672F\u5C4F\u969C/.test(text)) return 'mage';
-    if (/\u6D77\u9177|\u76D7\u8D3C|\u80CC\u523A|\u6BD2\u5203|\u95EA\u907F|\u81F4\u547D\u8FDE\u51FB/.test(text)) return 'rogue';
-    if (/\u963F\u5C14\u6CD5|\u730E\u4EBA|\u5C04\u51FB|\u591A\u91CD|\u5370\u8BB0|\u6CBB\u7597\u4E4B\u98CE/.test(text)) return 'hunter';
+    if (/拉格纳罗斯|熔火之王|boss|BOSS|熔岩元素|Phase|\[P[123]\]|狂暴|熔岩灼烧|禁疗|火焰盾|熔火突刺/.test(head)) return 'boss';
+    if (/克劳德|圣骑士|tank/.test(head)) return 'tank';
+    if (/索奈特|牧师|healer/.test(head)) return 'healer';
+    if (/欧帕斯|法师|mage/.test(head)) return 'mage';
+    if (/海酷|盗贼|rogue/.test(head)) return 'rogue';
+    if (/阿尔法|猎人|hunter/.test(head)) return 'hunter';
+    if (/拉格纳罗斯|boss|熔岩|裂隙|陷阱|灭世|烈焰风暴|召唤|狂暴|Phase|禁疗|火焰盾|熔火突刺|环境灼烧/.test(text)) return 'boss';
+    if (/克劳德|圣骑士|嘲讽|盾墙|英勇打击|破甲/.test(text)) return 'tank';
+    if (/索奈特|牧师|治疗术|群体治疗|驱散|复活/.test(text)) return 'healer';
+    if (/欧帕斯|法师|火球|暴风雪|冰冻|法术屏障/.test(text)) return 'mage';
+    if (/海酷|盗贼|背刺|毒刃|闪避|致命连击/.test(text)) return 'rogue';
+    if (/阿尔法|猎人|射击|多重|印记|治疗之风/.test(text)) return 'hunter';
     return 'system';
   }
 
@@ -580,9 +547,37 @@ var GameWS = (function () {
       _logCount = 0;
     }
     _logEntries = [];
-    // Also clear AI log
-    var aiLog = document.getElementById('ai-log');
-    if (aiLog) aiLog.innerHTML = '';
+
+    // Clear Header Row2 (Boss AI)
+    var bossAction = document.getElementById('boss-ai-action');
+    var bossReason = document.getElementById('boss-ai-reason');
+    var castInd = document.getElementById('header-cast-indicator');
+    var badges = document.getElementById('boss-badges');
+    if (bossAction) bossAction.textContent = '';
+    if (bossReason) bossReason.textContent = '';
+    if (castInd) castInd.classList.add('hidden');
+    if (badges) badges.innerHTML = '';
+
+    // Clear Boss Strategy Panel
+    var bsAction = document.getElementById('boss-strategy-action');
+    var bsReason = document.getElementById('boss-strategy-reason');
+    if (bsAction) bsAction.textContent = '';
+    if (bsReason) bsReason.textContent = '';
+
+    // Clear 5 AI chat windows
+    var roles = ['tank', 'healer', 'mage', 'rogue', 'hunter'];
+    for (var i = 0; i < roles.length; i++) {
+      var win = document.getElementById('ai-chat-' + roles[i]);
+      if (!win) continue;
+      var q = win.querySelector('.ai-chat-query');
+      var r = win.querySelector('.ai-chat-response');
+      var rsn = win.querySelector('.ai-chat-reason');
+      var t = win.querySelector('.ai-chat-time');
+      if (q) q.textContent = '';
+      if (r) r.textContent = '';
+      if (rsn) rsn.textContent = '';
+      if (t) t.textContent = '';
+    }
   }
 
   function _rebuildLogForFilter(filter) {
@@ -635,18 +630,17 @@ var GameWS = (function () {
           _updateTimer(msg.data.game_time);
           if (msg.data.boss) {
             _updatePhaseBadge(msg.data.boss.phase);
-            _updateHeaderBossHp(msg.data.boss);
           }
-          // Update boss card from boss_card data
+          // Update Boss Header (fused)
+          var bossAiEntry = null;
+          if (msg.data.ai_log) {
+            bossAiEntry = _updateAiChatWindows(msg.data.ai_log);
+          }
           if (msg.data.boss_card) {
-            _updateBossCard(msg.data.boss_card);
+            _updateBossHeader(msg.data.boss_card, bossAiEntry);
           }
           // Update player cards
           _updateCharCards(msg.data.characters);
-          // Update AI Log
-          if (msg.data.ai_log) {
-            _updateAiLog(msg.data.ai_log);
-          }
           // Process combat logs
           var logs = msg.data.combat_log;
           if (logs && logs.length) {
@@ -672,7 +666,7 @@ var GameWS = (function () {
         if (msg.data) {
           var result = msg.data.result || '';
           var message = msg.data.message || '';
-          _addLog('=== ' + (result === 'victory' ? '\u80DC\u5229!' : '\u5931\u8D25') + ' === ' + message, 'system', 0);
+          _addLog('=== ' + (result === 'victory' ? '胜利!' : '失败') + ' === ' + message, 'system', 0);
           _updateGameStatus(false, result);
         }
       } else if (type === 'game_control') {
@@ -680,13 +674,27 @@ var GameWS = (function () {
           var action = msg.data.action;
           if (action === 'started') {
             _updateGameStatus(true, null);
-            _addLog('>>> \u6218\u6597\u5F00\u59CB! <<<', 'system', 0);
+            _addLog('>>> 战斗开始! <<<', 'system', 0);
           } else if (action === 'stopped') {
             _updateGameStatus(false, 'stopped');
+          } else if (action === 'reset') {
+            // Reset: clear logs, set status to "waiting", do NOT auto-start
+            _clearLog();
+            _updateGameStatus(false, null);
+            _updateTimer(0);
+            _updatePhaseBadge(1);
+            // Reset Header boss HP bar
+            var hpFill = document.getElementById('header-boss-hp-fill');
+            var hpText = document.getElementById('header-boss-hp-text');
+            if (hpFill) hpFill.style.width = '100%';
+            if (hpText) hpText.textContent = '';
+            _addLog('✔ 已重置，点击"开始"开战。', 'system', 0);
+            _emit('game_reset', null);
           } else if (action === 'restarted') {
+            // Legacy support: treat as reset + start
             _clearLog();
             _updateGameStatus(true, null);
-            _addLog('>>> \u91CD\u65B0\u5F00\u59CB! <<<', 'system', 0);
+            _addLog('>>> 重新开始! <<<', 'system', 0);
           }
         }
       }
@@ -774,30 +782,6 @@ var GameWS = (function () {
     if (stopBtn) stopBtn.addEventListener('click', stopGame);
     if (restartBtn) restartBtn.addEventListener('click', restartGame);
 
-    // Main log tab switching (BATTLE | AI)
-    var mainTabs = document.querySelectorAll('.log-main-tab');
-    for (var m = 0; m < mainTabs.length; m++) {
-      mainTabs[m].addEventListener('click', function () {
-        var panel = this.getAttribute('data-panel');
-        var allMainTabs = document.querySelectorAll('.log-main-tab');
-        for (var k = 0; k < allMainTabs.length; k++) {
-          allMainTabs[k].classList.remove('active');
-        }
-        this.classList.add('active');
-
-        // Toggle panels
-        var battlePanel = document.getElementById('battle-log-panel');
-        var aiPanel = document.getElementById('ai-log-panel');
-        if (panel === 'battle') {
-          if (battlePanel) battlePanel.classList.add('active');
-          if (aiPanel) aiPanel.classList.remove('active');
-        } else {
-          if (battlePanel) battlePanel.classList.remove('active');
-          if (aiPanel) aiPanel.classList.add('active');
-        }
-      });
-    }
-
     // Battle log sub-tab filtering
     var tabs = document.querySelectorAll('.log-tab');
     for (var i = 0; i < tabs.length; i++) {
@@ -813,7 +797,7 @@ var GameWS = (function () {
       });
     }
 
-    // Tactical quick command buttons (send immediately, with visual feedback)
+    // Tactical quick command buttons
     var quickBtns = document.querySelectorAll('.quick-btn');
     for (var q = 0; q < quickBtns.length; q++) {
       quickBtns[q].addEventListener('click', function () {
@@ -823,20 +807,6 @@ var GameWS = (function () {
           this.classList.add('sent');
           var btnRef = this;
           setTimeout(function() { btnRef.classList.remove('sent'); }, 300);
-        }
-      });
-    }
-
-    // Help button toggle
-    var helpBtn = document.getElementById('cmd-help-btn');
-    var helpPanel = document.getElementById('cmd-help-panel');
-    if (helpBtn && helpPanel) {
-      helpBtn.addEventListener('click', function () {
-        helpPanel.classList.toggle('hidden');
-      });
-      document.addEventListener('click', function (e) {
-        if (!helpBtn.contains(e.target) && !helpPanel.contains(e.target)) {
-          helpPanel.classList.add('hidden');
         }
       });
     }

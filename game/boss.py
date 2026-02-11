@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from game.character import Character, Debuff
+from game.character import Buff, Character, Debuff
 from game.events import (
     COMBAT_LOG, DAMAGE, DEATH, PHASE_CHANGE, SUMMON, EventBus,
 )
@@ -20,8 +20,8 @@ class MoltenElemental:
     def __init__(self, add_id: str) -> None:
         self.id = add_id
         self.name = "熔岩元素"
-        self.max_hp = 4000
-        self.hp = 4000
+        self.max_hp = 6000
+        self.hp = 6000
         self.alive = True
         self.attack_damage = 200
         self.attack_cooldown = 2.0
@@ -64,6 +64,8 @@ class MoltenElemental:
         return {
             "id": self.id,
             "name": self.name,
+            "role": "minion",
+            "type": "minion",
             "hp": self.hp,
             "max_hp": self.max_hp,
             "alive": self.alive,
@@ -84,7 +86,7 @@ class Boss:
 
         # Base stats (tuned for slow LLM response ~3-5s per agent)
         self.base_attack_min = 350
-        self.base_attack_max = 550
+        self.base_attack_max = 600
         self.attack_speed = 2.5  # seconds between auto attacks
 
         # --- Character-compatible interface ---
@@ -96,10 +98,16 @@ class Boss:
         # Casting state (same format as Character)
         self.casting: dict[str, Any] | None = None
 
-        # Initial cooldowns — ramp up boss aggression gradually
-        self.cooldowns[607] = 30.0  # 灭世之炎: first available ~30s (around P2)
-        self.cooldowns[605] = 15.0  # 召唤元素: first available ~15s
-        self.cooldowns[604] = 8.0   # 烈焰风暴: first available ~8s
+        # Buffs on boss (e.g. fire shield)
+        self.buffs: list[Buff] = []
+
+        # Initial cooldowns — aggressive ramp up
+        self.cooldowns[607] = 25.0  # 灭世之炎: first available ~25s
+        self.cooldowns[605] = 6.0   # 召唤元素: first available ~6s (early adds!)
+        self.cooldowns[604] = 3.0   # 烈焰风暴: first available ~3s (fast AOE)
+        self.cooldowns[609] = 20.0  # 禁疗之焰: first available ~20s
+        self.cooldowns[610] = 18.0  # 火焰盾: first available ~18s
+        self.cooldowns[611] = 10.0  # 熔火突刺: first available ~10s
 
         # Phase 2 adds
         self.adds: list[MoltenElemental] = []
@@ -113,9 +121,15 @@ class Boss:
         # Debuffs on boss (from players)
         self.debuffs: list[Debuff] = []
 
+        # Environmental AOE timer for adds
+        self.add_aoe_timer: float = 0.0
+
+        # Passive lava pulse timer (P2+, periodic AOE to all players)
+        self.lava_pulse_timer: float = 0.0
+
         # P3 enrage
         self.enraged = False
-        self.enrage_timer = 180.0
+        self.enrage_timer = 120.0
 
     # ------------------------------------------------------------------
     # Properties
@@ -128,9 +142,9 @@ class Boss:
     def attack_min(self) -> int:
         mult = 1.0
         if self.phase >= 2:
-            mult += 0.15
-        if self.phase >= 3:
             mult += 0.25
+        if self.phase >= 3:
+            mult += 0.40
         if self.enraged:
             mult += 0.5
         return int(self.base_attack_min * mult)
@@ -139,9 +153,9 @@ class Boss:
     def attack_max(self) -> int:
         mult = 1.0
         if self.phase >= 2:
-            mult += 0.15
-        if self.phase >= 3:
             mult += 0.25
+        if self.phase >= 3:
+            mult += 0.40
         if self.enraged:
             mult += 0.5
         return int(self.base_attack_max * mult)
@@ -218,6 +232,26 @@ class Boss:
         self.debuffs = [d for d in self.debuffs if d.debuff_id != debuff.debuff_id]
         self.debuffs.append(debuff)
 
+    # --- Buff management (e.g. fire shield) ---
+    def has_buff(self, buff_id: str) -> bool:
+        return any(b.buff_id == buff_id for b in self.buffs)
+
+    def get_buff(self, buff_id: str) -> Buff | None:
+        for b in self.buffs:
+            if b.buff_id == buff_id:
+                return b
+        return None
+
+    def add_buff(self, buff: Buff) -> None:
+        self.buffs = [b for b in self.buffs if b.buff_id != buff.buff_id]
+        self.buffs.append(buff)
+
+    def remove_buff(self, buff_id: str) -> Buff | None:
+        for i, b in enumerate(self.buffs):
+            if b.buff_id == buff_id:
+                return self.buffs.pop(i)
+        return None
+
     # ------------------------------------------------------------------
     # Phase management
     # ------------------------------------------------------------------
@@ -242,12 +276,17 @@ class Boss:
         self.event_bus.emit(COMBAT_LOG, {
             "message": f"[Phase 2] {self.name}进入狂怒阶段! 攻击力提升30%!",
         })
+        # Auto-summon first wave of adds on Phase 2 entry
+        self.summon_adds(3)
+        self.event_bus.emit(COMBAT_LOG, {
+            "message": f"[Phase 2] {self.name}召唤了3个熔岩元素!",
+        })
 
     def _enter_phase3(self) -> None:
         self.event_bus.emit(COMBAT_LOG, {
             "message": f"[Phase 3] {self.name}进入灭世阶段! 攻击力+50%, 攻速+30%! 狂暴倒计时90秒!",
         })
-        self.enrage_timer = 90.0
+        self.enrage_timer = 60.0
 
     # ------------------------------------------------------------------
     # Timer ticking (called by engine each tick)
@@ -269,6 +308,17 @@ class Boss:
         # Casting
         if self.casting:
             self.casting["remaining"] -= dt
+
+        # Buffs
+        remaining_buffs: list[Buff] = []
+        for b in self.buffs:
+            if b.duration is not None and b.duration > 0:
+                b.duration -= dt
+                if b.duration <= 0:
+                    expired.append(f"buff:{b.buff_id}")
+                    continue
+            remaining_buffs.append(b)
+        self.buffs = remaining_buffs
 
         # Debuffs
         remaining_debuffs: list[Debuff] = []
@@ -296,12 +346,13 @@ class Boss:
     # Passive mechanics (called by engine each tick)
     # ------------------------------------------------------------------
     def tick_passive(self, dt: float, characters: list[Character]) -> None:
-        """Tick fissures, traps, adds - passive mechanics independent of Agent."""
+        """Tick fissures, traps, adds, lava pulse - passive mechanics independent of Agent."""
         if not self.alive:
             return
         self._tick_fissures(dt, characters)
         self._tick_traps(dt, characters)
         self._tick_adds(dt, characters)
+        self._tick_lava_pulse(dt, characters)
 
     def _tick_fissures(self, dt: float, characters: list[Character]) -> None:
         remaining = []
@@ -366,10 +417,58 @@ class Boss:
                     if not target.alive:
                         self.event_bus.emit(DEATH, {"target": target.id, "source": add.name})
 
+        # Environmental AOE: when 2+ adds alive, periodic AOE damage to all players
+        live_adds = [a for a in self.adds if a.alive]
+        if len(live_adds) >= 2:
+            self.add_aoe_timer += dt
+            if self.add_aoe_timer >= 2.0:
+                self.add_aoe_timer = 0.0
+                aoe_damage = 80 * len(live_adds)
+                living = [c for c in characters if c.alive]
+                for c in living:
+                    actual = c.take_damage(aoe_damage)
+                    if actual > 0:
+                        self.event_bus.emit(DAMAGE, {
+                            "source": "adds", "target": c.id,
+                            "skill": "熔岩环境灼烧", "amount": actual,
+                        })
+                    if not c.alive:
+                        self.event_bus.emit(DEATH, {"target": c.id, "source": "熔岩环境灼烧"})
+                self.event_bus.emit(COMBAT_LOG, {
+                    "message": f"[熔岩灼烧] {len(live_adds)}个元素释放环境AOE! 全体受到{aoe_damage}伤害!",
+                })
+        else:
+            self.add_aoe_timer = 0.0
+
+    def _tick_lava_pulse(self, dt: float, characters: list[Character]) -> None:
+        """P2+: Periodic lava pulse AOE to all players. Scales with phase."""
+        if self.phase < 2:
+            return
+        self.lava_pulse_timer += dt
+        interval = 6.0 if self.phase == 2 else 4.5  # P3 faster
+        pulse_dmg = 150 if self.phase == 2 else 250  # P3 harder
+        if self.enraged:
+            pulse_dmg = 400  # Enrage pulse is devastating
+        if self.lava_pulse_timer >= interval:
+            self.lava_pulse_timer = 0.0
+            living = [c for c in characters if c.alive]
+            for c in living:
+                actual = c.take_damage(pulse_dmg)
+                if actual > 0:
+                    self.event_bus.emit(DAMAGE, {
+                        "source": "boss", "target": c.id,
+                        "skill": "熔岩脉冲", "amount": actual, "is_dot": True,
+                    })
+                if not c.alive:
+                    self.event_bus.emit(DEATH, {"target": c.id, "source": "熔岩脉冲"})
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"[熔岩脉冲] 拉格纳罗斯释放熔岩脉冲! 全体受到{pulse_dmg}伤害!",
+            })
+
     # ------------------------------------------------------------------
     # Summon adds (called by engine when skill 605 executes)
     # ------------------------------------------------------------------
-    def summon_adds(self, count: int = 2) -> list[MoltenElemental]:
+    def summon_adds(self, count: int = 3) -> list[MoltenElemental]:
         add_offset = len(self.adds)
         new_adds = []
         for i in range(count):
@@ -434,7 +533,10 @@ class Boss:
                 "target": self.casting["target"],
             } if self.casting else None,
             "cooldowns": {str(k): round(v, 2) for k, v in self.cooldowns.items()},
-            "buffs": [],
+            "buffs": [
+                {"id": b.buff_id, "name": b.name, "duration": round(b.duration, 2), "params": b.params}
+                for b in self.buffs
+            ],
             "debuffs": [
                 {"id": d.debuff_id, "name": d.name, "duration": round(d.duration, 2), "params": d.params}
                 for d in self.debuffs

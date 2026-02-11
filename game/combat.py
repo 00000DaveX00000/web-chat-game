@@ -131,6 +131,22 @@ class CombatSystem:
             "skill": skill.name, "amount": actual,
         })
 
+        # Fire shield reflection (Boss buff → reflect damage to attacker)
+        if hasattr(target, "has_buff") and target.has_buff("fire_shield"):
+            fs = target.get_buff("fire_shield")
+            if fs and actual > 0:
+                reflect_pct = fs.params.get("damage_reflect", 0)
+                reflect_dmg = int(actual * reflect_pct)
+                if reflect_dmg > 0 and hasattr(caster, "take_damage"):
+                    reflected = caster.take_damage(reflect_dmg)
+                    if reflected > 0:
+                        self.event_bus.emit(DAMAGE, {
+                            "source": "boss", "target": caster.id,
+                            "skill": "火焰盾反伤", "amount": reflected,
+                        })
+                    if not caster.alive:
+                        self.event_bus.emit(DEATH, {"target": caster.id, "source": "火焰盾"})
+
         # Apply DOT if present
         if eff.get("dot"):
             dot_debuff = Debuff(
@@ -393,13 +409,13 @@ class CombatSystem:
             "skill": skill_name, "amount": actual,
         })
         self.event_bus.emit(COMBAT_LOG, {
-            "message": f"[Boss] {skill_name} \u2192 {target.name}  -{actual} (HP:{target.hp}/{target.max_hp})",
+            "message": f"[Boss] {skill_name} → {target.name}  -{actual} (HP:{target.hp}/{target.max_hp})",
             "type": "damage",
         })
         if not target.alive:
             self.event_bus.emit(DEATH, {"target": target.id, "source": skill_name})
             self.event_bus.emit(COMBAT_LOG, {
-                "message": f"\u2620 {target.name} \u88AB {skill_name} \u51FB\u6740!",
+                "message": f"☠ {target.name} 被 {skill_name} 击杀!",
                 "type": "damage",
             })
         return actual
@@ -419,12 +435,34 @@ class CombatSystem:
             if not t.alive:
                 self.event_bus.emit(DEATH, {"target": t.id, "source": skill_name})
                 self.event_bus.emit(COMBAT_LOG, {
-                    "message": f"\u2620 {t.name} \u88AB {skill_name} \u51FB\u6740!",
+                    "message": f"☠ {t.name} 被 {skill_name} 击杀!",
                     "type": "damage",
                 })
         if total > 0:
             self.event_bus.emit(COMBAT_LOG, {
-                "message": f"[Boss] {skill_name} AOE \u2192 \u5168\u4F53 -{damage} (\u603B{total})",
+                "message": f"[Boss] {skill_name} AOE → 全体 -{damage} (总{total})",
                 "type": "damage",
             })
         return total
+
+    # ------------------------------------------------------------------
+    # HOT processing (called each tick)
+    # ------------------------------------------------------------------
+    def process_hots(self, characters: list[Character], dt: float) -> None:
+        """Process HoT effects from buffs on characters each tick."""
+        for char in characters:
+            if not char.alive:
+                continue
+            for buff in char.buffs:
+                hot = buff.params.get("hot_per_second", 0)
+                if hot > 0:
+                    heal_amount = int(hot * dt)
+                    actual = char.receive_heal(heal_amount)
+                    if actual > 0:
+                        self.event_bus.emit(HEAL, {
+                            "source": buff.source or char.id,
+                            "target": char.id,
+                            "skill": f"{buff.name}(HoT)",
+                            "amount": actual,
+                            "is_hot": True,
+                        })

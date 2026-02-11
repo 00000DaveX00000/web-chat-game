@@ -74,7 +74,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Broadcast the command to all clients as a log entry
                 await manager.broadcast({
                     "type": "combat_log",
-                    "data": {"message": f"[上帝指令] {content}", "type": "phase"},
+                    "data": {"message": f"[团长指令] {content}", "type": "phase"},
                 })
             elif msg_type == "start" and engine:
                 asyncio.create_task(engine.start_game())
@@ -109,9 +109,9 @@ async def restart_game():
     if engine:
         engine.stop_game()
         engine.reset_game()
-        asyncio.create_task(engine.start_game())
-        await manager.broadcast({"type": "game_control", "data": {"action": "restarted"}})
-        return {"status": "restarted"}
+        # Do NOT auto-start; user must click "开始" manually
+        await manager.broadcast({"type": "game_control", "data": {"action": "reset"}})
+        return {"status": "reset"}
     return {"status": "error", "message": "engine not initialized"}
 
 

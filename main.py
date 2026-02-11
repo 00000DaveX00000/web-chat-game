@@ -78,8 +78,8 @@ async def main() -> None:
 
     logger.info("LLM config: base_url=%s model=%s", base_url or "(default)", llm_defaults.get("model"))
 
-    # Shared semaphore: limit concurrent LLM calls
-    llm_semaphore = asyncio.Semaphore(3)
+    # Shared semaphore: allow all 6 agents concurrent LLM calls
+    llm_semaphore = asyncio.Semaphore(6)
 
     agents: list[BaseAgent] = []
     all_members = team_config.get("members", {})
@@ -96,8 +96,8 @@ async def main() -> None:
             base_url=base_url,
             model=model,
             temperature=llm_defaults.get("temperature", 0.3),
-            max_tokens=llm_defaults.get("max_tokens", 150),
-            timeout=llm_defaults.get("timeout", 2.0),
+            max_tokens=llm_defaults.get("max_tokens", 500),
+            timeout=llm_defaults.get("timeout", 30.0),
         )
         system_prompt = get_system_prompt(actual_role)
 

@@ -18,7 +18,7 @@ from game.skills import SKILLS, get_skill
 
 logger = logging.getLogger(__name__)
 
-TICK_INTERVAL = 0.5  # 500ms per tick
+TICK_INTERVAL = 0.25  # 250ms per tick (4 ticks/sec for smoother gameplay)
 
 
 class GameEngine:
@@ -81,6 +81,7 @@ class GameEngine:
                 "name": agent.name,
                 "role": agent.role,
                 "is_boss": getattr(agent, "is_boss", False),
+                "querying": getattr(agent, "_querying", False),
                 "last_query": getattr(agent, "last_query", ""),
                 "last_response": getattr(agent, "last_response", None),
             })
@@ -178,6 +179,7 @@ class GameEngine:
 
         # 3. Process DOTs and HOTs
         self.combat.process_dots(list(self.characters.values()), self.boss, dt)
+        self.combat.process_hots(list(self.characters.values()), dt)
 
         # 4. Process casting completions (characters + boss)
         self._process_casts(dt)
@@ -451,7 +453,7 @@ class GameEngine:
                 detail = f" [{result['debuff']}]"
 
         self.event_bus.emit(COMBAT_LOG, {
-            "message": f"[{char.name}] 使用 {skill.name} \u2192 {target_name}{detail}",
+            "message": f"[{char.name}] 使用 {skill.name} → {target_name}{detail}",
         })
 
     def _execute_boss_skill(self, skill, target_id: str) -> None:
@@ -493,9 +495,10 @@ class GameEngine:
             })
 
         elif skill.id == 605:  # 召唤元素
-            self.boss.summon_adds(skill.effects.get("count", 2))
+            count = skill.effects.get("count", 3)
+            self.boss.summon_adds(count)
             self.event_bus.emit(COMBAT_LOG, {
-                "message": "拉格纳罗斯召唤了2个熔岩元素!",
+                "message": f"拉格纳罗斯召唤了{count}个熔岩元素!",
             })
 
         elif skill.id == 606:  # 熔岩裂隙
@@ -534,6 +537,42 @@ class GameEngine:
                 })
                 self.event_bus.emit(COMBAT_LOG, {
                     "message": f"熔岩陷阱标记了{target.name}! 5秒后爆炸!",
+                })
+
+        elif skill.id == 609:  # 禁疗之焰
+            for c in living:
+                debuff = Debuff(
+                    debuff_id="heal_reduction",
+                    name="禁疗之焰",
+                    duration=skill.effects.get("duration", 8),
+                    params={"heal_reduction": skill.effects.get("heal_reduction", 0.75)},
+                    source="boss",
+                )
+                c.add_debuff(debuff)
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"禁疗之焰! 全体治疗效果降低{int(skill.effects.get('heal_reduction', 0.75) * 100)}%持续{skill.effects.get('duration', 8)}秒!",
+            })
+
+        elif skill.id == 610:  # 火焰盾
+            from game.character import Buff
+            buff = Buff(
+                buff_id="fire_shield",
+                name="火焰盾",
+                duration=skill.effects.get("duration", 10),
+                params={"damage_reflect": skill.effects.get("damage_reflect", 0.3)},
+                source="boss",
+            )
+            self.boss.add_buff(buff)
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"火焰盾! Boss反弹{int(skill.effects.get('damage_reflect', 0.3) * 100)}%伤害持续{skill.effects.get('duration', 10)}秒!",
+            })
+
+        elif skill.id == 611:  # 熔火突刺 (cast completed)
+            if target and target.alive:
+                dmg = skill.effects.get("base_damage", 5000)
+                self.combat.boss_attack(self.boss, target, dmg, "熔火突刺")
+                self.event_bus.emit(COMBAT_LOG, {
+                    "message": f"熔火突刺命中{target.name}! {dmg}伤害! {'盾墙减伤!' if target.has_buff('shield_wall') else '没开盾墙!'}",
                 })
 
     def _process_god_commands(self) -> None:
@@ -630,7 +669,7 @@ class GameEngine:
             # Unrecognized commands are treated as natural language broadcast
             self.god_command_text = command
             self.event_bus.emit(COMBAT_LOG, {
-                "message": f"[上帝指令] {command}",
+                "message": f"[团长指令] {command}",
             })
 
     # ------------------------------------------------------------------

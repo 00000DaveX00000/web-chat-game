@@ -45,8 +45,8 @@ SHIELD_WALL = SkillDef(
     mana_cost=100,
     cast_time=0,
     target_type="self",
-    description="减伤50%持续8秒",
-    effects={"type": "buff", "buff_id": "shield_wall", "duration": 8, "damage_reduction": 0.5},
+    description="减伤50%持续8秒,并回复200HP/秒",
+    effects={"type": "buff", "buff_id": "shield_wall", "duration": 8, "damage_reduction": 0.5, "hot_per_second": 200},
 )
 
 SUNDER_ARMOR = SkillDef(
@@ -83,7 +83,7 @@ HEAL = SkillDef(
     role="healer",
     cooldown=0,
     mana_cost=120,
-    cast_time=1.5,
+    cast_time=2.0,
     target_type="ally",
     description="单体治疗800HP",
     effects={"type": "heal", "base_heal": 800},
@@ -120,7 +120,7 @@ RESURRECT = SkillDef(
     role="healer",
     cooldown=60,
     mana_cost=500,
-    cast_time=3.0,
+    cast_time=4.0,
     target_type="ally",
     description="复活一个死亡队友,恢复30%HP",
     effects={"type": "resurrect", "hp_percent": 0.3},
@@ -135,7 +135,7 @@ FIREBALL = SkillDef(
     role="mage",
     cooldown=0,
     mana_cost=100,
-    cast_time=1.5,
+    cast_time=2.0,
     target_type="enemy",
     description="造成500伤害",
     effects={"type": "damage", "base_damage": 500},
@@ -239,7 +239,7 @@ AIMED_SHOT = SkillDef(
     role="hunter",
     cooldown=0,
     mana_cost=60,
-    cast_time=1.0,
+    cast_time=1.5,
     target_type="enemy",
     description="造成420伤害",
     effects={"type": "damage", "base_damage": 420},
@@ -289,11 +289,11 @@ BOSS_AUTO_ATTACK = SkillDef(
     id=601,
     name="普攻",
     role="boss",
-    cooldown=3.5,
+    cooldown=2.5,
     mana_cost=0,
     cast_time=0,
     target_type="enemy",
-    description="造成200-400伤害",
+    description="造成350-600伤害",
     effects={"type": "boss_attack"},
     auto=True,
 )
@@ -302,12 +302,12 @@ BOSS_CLEAVE = SkillDef(
     id=602,
     name="顺劈斩",
     role="boss",
-    cooldown=6.0,
+    cooldown=3.0,
     mana_cost=0,
     cast_time=0,
     target_type="enemy",
-    description="造成700伤害",
-    effects={"type": "boss_attack", "base_damage": 700},
+    description="造成900伤害",
+    effects={"type": "boss_attack", "base_damage": 900},
     auto=True,
 )
 
@@ -315,48 +315,48 @@ BOSS_MAGMA_BLAST = SkillDef(
     id=603,
     name="岩浆喷射",
     role="boss",
-    cooldown=10.0,
+    cooldown=6.0,
     mana_cost=0,
     cast_time=0,
     target_type="enemy",
-    description="造成450伤害并附加100/s灼烧DOT持续5秒",
-    effects={"type": "boss_magma", "base_damage": 450, "dot_damage": 100, "dot_duration": 5},
+    description="造成600伤害并附加150/s灼烧DOT持续5秒",
+    effects={"type": "boss_magma", "base_damage": 600, "dot_damage": 150, "dot_duration": 5},
 )
 
 BOSS_FIRESTORM = SkillDef(
     id=604,
     name="烈焰风暴",
     role="boss",
-    cooldown=12.0,
+    cooldown=6.0,
     mana_cost=0,
     cast_time=0,
     target_type="enemy_all",
-    description="对全体造成400伤害",
-    effects={"type": "boss_aoe", "base_damage": 400},
+    description="对全体造成600伤害",
+    effects={"type": "boss_aoe", "base_damage": 600},
 )
 
 BOSS_SUMMON = SkillDef(
     id=605,
     name="召唤元素",
     role="boss",
-    cooldown=20.0,
+    cooldown=10.0,
     mana_cost=0,
     cast_time=0,
     target_type="self",
-    description="召唤2个熔岩元素小怪",
-    effects={"type": "boss_summon", "count": 2},
+    description="召唤3个熔岩元素小怪",
+    effects={"type": "boss_summon", "count": 3},
 )
 
 BOSS_FISSURE = SkillDef(
     id=606,
     name="熔岩裂隙",
     role="boss",
-    cooldown=10.0,
+    cooldown=5.0,
     mana_cost=0,
     cast_time=0,
     target_type="enemy",
-    description="在目标脚下制造裂隙,200/s DOT持续6秒",
-    effects={"type": "boss_fissure", "dot_damage": 200, "dot_duration": 6},
+    description="在目标脚下制造裂隙,300/s DOT持续5秒",
+    effects={"type": "boss_fissure", "dot_damage": 300, "dot_duration": 5},
 )
 
 BOSS_APOCALYPSE = SkillDef(
@@ -365,9 +365,9 @@ BOSS_APOCALYPSE = SkillDef(
     role="boss",
     cooldown=20.0,
     mana_cost=0,
-    cast_time=3.0,
+    cast_time=10.0,
     target_type="enemy_all",
-    description="3秒读条,对全体造成8000伤害(可打断)",
+    description="10秒读条,对全体造成8000伤害(可打断)",
     effects={"type": "boss_apocalypse", "base_damage": 8000},
 )
 
@@ -375,12 +375,48 @@ BOSS_TRAP = SkillDef(
     id=608,
     name="熔岩陷阱",
     role="boss",
-    cooldown=10.0,
+    cooldown=6.0,
     mana_cost=0,
     cast_time=0,
     target_type="enemy",
-    description="标记目标,5秒后爆炸造成2000伤害",
-    effects={"type": "boss_trap", "damage": 2000, "countdown": 5.0},
+    description="标记目标,5秒后爆炸造成2500伤害",
+    effects={"type": "boss_trap", "damage": 2500, "countdown": 5.0},
+)
+
+BOSS_HEAL_REDUCTION = SkillDef(
+    id=609,
+    name="禁疗之焰",
+    role="boss",
+    cooldown=25.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="enemy_all",
+    description="全体玩家治疗效果降低75%,持续6秒(需逐个驱散)",
+    effects={"type": "boss_heal_reduction", "heal_reduction": 0.75, "duration": 6},
+)
+
+BOSS_FIRE_SHIELD = SkillDef(
+    id=610,
+    name="火焰盾",
+    role="boss",
+    cooldown=18.0,
+    mana_cost=0,
+    cast_time=0,
+    target_type="self",
+    description="获得火焰盾,反弹30%受到的伤害,持续10秒",
+    effects={"type": "boss_fire_shield", "damage_reflect": 0.3, "duration": 10},
+)
+
+BOSS_THRUST = SkillDef(
+    id=611,
+    name="熔火突刺",
+    role="boss",
+    cooldown=12.0,
+    mana_cost=0,
+    cast_time=2.0,
+    target_type="enemy",
+    description="2秒读条,对当前目标造成5000伤害(需开盾墙抵挡)",
+    effects={"type": "boss_thrust", "base_damage": 5000},
 )
 
 # ---------------------------------------------------------------------------
@@ -394,6 +430,7 @@ ALL_SKILLS: list[SkillDef] = [
     AIMED_SHOT, MULTI_SHOT, HUNTERS_MARK, HEALING_WIND,
     BOSS_AUTO_ATTACK, BOSS_CLEAVE, BOSS_MAGMA_BLAST, BOSS_FIRESTORM,
     BOSS_SUMMON, BOSS_FISSURE, BOSS_APOCALYPSE, BOSS_TRAP,
+    BOSS_HEAL_REDUCTION, BOSS_FIRE_SHIELD, BOSS_THRUST,
 ]
 
 SKILLS: dict[int, SkillDef] = {s.id: s for s in ALL_SKILLS}

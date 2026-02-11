@@ -23,8 +23,8 @@ class LLMClient:
         base_url: str | None = None,
         model: str = "claude-sonnet-4-5-20250929",
         temperature: float = 0.3,
-        max_tokens: int = 150,
-        timeout: float = 2.0,
+        max_tokens: int = 300,
+        timeout: float = 30.0,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -90,8 +90,12 @@ class LLMClient:
 
     async def _call_api_with_tools(
         self, system_prompt: str, user_prompt: str, tools: list[dict]
-    ) -> dict[str, Any] | None:
-        """Call Anthropic API with tools, return {tool_name, tool_input, skill_id, target, reason}."""
+    ) -> list[dict[str, Any]] | None:
+        """Call Anthropic API with tools, return list of decisions.
+
+        Each decision: {tool_name, tool_input, skill_id, target, reason}.
+        Supports multiple tool calls per response (multi-skill).
+        """
         resp = await self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -101,16 +105,17 @@ class LLMClient:
             tools=tools,
             tool_choice={"type": "any"},
         )
+        decisions = []
         for block in resp.content:
             if block.type == "tool_use":
-                return {
+                decisions.append({
                     "tool_name": block.name,
                     "tool_input": block.input,
                     "skill_id": int(block.name.replace("use_", "")),
                     "target": block.input.get("target", ""),
                     "reason": block.input.get("reason", ""),
-                }
-        return None
+                })
+        return decisions if decisions else None
 
     async def _call_api(self, system_prompt: str, user_prompt: str) -> str:
         """Invoke the underlying LLM API and return raw text."""
