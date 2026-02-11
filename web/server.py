@@ -87,9 +87,43 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/api/start")
 async def start_game():
     if engine:
+        if engine.is_running:
+            return {"status": "already_running"}
         asyncio.create_task(engine.start_game())
+        await manager.broadcast({"type": "game_control", "data": {"action": "started"}})
         return {"status": "started"}
     return {"status": "error", "message": "engine not initialized"}
+
+
+@app.post("/api/stop")
+async def stop_game():
+    if engine:
+        engine.stop_game()
+        await manager.broadcast({"type": "game_control", "data": {"action": "stopped"}})
+        return {"status": "stopped"}
+    return {"status": "error", "message": "engine not initialized"}
+
+
+@app.post("/api/restart")
+async def restart_game():
+    if engine:
+        engine.stop_game()
+        engine.reset_game()
+        asyncio.create_task(engine.start_game())
+        await manager.broadcast({"type": "game_control", "data": {"action": "restarted"}})
+        return {"status": "restarted"}
+    return {"status": "error", "message": "engine not initialized"}
+
+
+@app.get("/api/status")
+async def game_status():
+    if engine:
+        return {
+            "running": engine.is_running,
+            "result": engine.result,
+            "tick": engine.tick_count,
+        }
+    return {"running": False}
 
 
 @app.post("/api/god_command")

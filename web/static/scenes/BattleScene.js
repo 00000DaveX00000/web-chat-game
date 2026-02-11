@@ -1,6 +1,7 @@
 /**
  * BattleScene - Main battle rendering scene.
  * Renders Boss, characters, skill animations, and damage numbers.
+ * Adjusted for 720x420 canvas.
  */
 var BattleScene = new Phaser.Class({
   Extends: Phaser.Scene,
@@ -13,6 +14,9 @@ var BattleScene = new Phaser.Class({
     this._lastState = null;
     this._animQueue = [];
     this._animPlaying = false;
+    // Canvas dimensions
+    this.W = 720;
+    this.H = 420;
   },
 
   create: function () {
@@ -40,14 +44,15 @@ var BattleScene = new Phaser.Class({
   /* ===== Battleground background ===== */
   _drawBattleground: function () {
     var g = this.add.graphics();
+    var W = this.W, H = this.H;
 
     // Dark floor gradient
     g.fillStyle(0x0a0a1a, 1);
-    g.fillRect(0, 0, 960, 640);
+    g.fillRect(0, 0, W, H);
 
     // Stone floor tiles
-    for (var y = 0; y < 640; y += 32) {
-      for (var x = 0; x < 960; x += 32) {
+    for (var y = 0; y < H; y += 32) {
+      for (var x = 0; x < W; x += 32) {
         var shade = 0x111122 + ((x + y) % 64 === 0 ? 0x050508 : 0);
         g.fillStyle(shade, 1);
         g.fillRect(x, y, 31, 31);
@@ -55,14 +60,15 @@ var BattleScene = new Phaser.Class({
     }
 
     // Arena circle (subtle)
+    var cx = W / 2, cy = H / 2 + 20;
     g.lineStyle(2, 0x222244, 0.4);
-    g.strokeCircle(480, 340, 260);
+    g.strokeCircle(cx, cy, 180);
     g.lineStyle(1, 0x222244, 0.2);
-    g.strokeCircle(480, 340, 200);
+    g.strokeCircle(cx, cy, 140);
 
     // Top border glow (boss area)
     g.fillStyle(0x330000, 0.3);
-    g.fillRect(0, 0, 960, 80);
+    g.fillRect(0, 0, W, 60);
   },
 
   /* ===== State Update Handler ===== */
@@ -85,7 +91,7 @@ var BattleScene = new Phaser.Class({
       }
     }
 
-    // Update adds (from boss.adds or top-level adds)
+    // Update adds
     var adds = (data.boss && data.boss.adds) || data.adds || [];
     for (var j = 0; j < adds.length; j++) {
       if (adds[j].alive) {
@@ -113,7 +119,7 @@ var BattleScene = new Phaser.Class({
       // Name label
       var nameText = this.add.text(pos.x, pos.y + (isBoss ? 50 : 28), info.name || id, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
+        fontSize: '7px',
         color: isBoss ? '#ff4444' : '#ccccdd',
         align: 'center'
       }).setOrigin(0.5, 0);
@@ -165,19 +171,19 @@ var BattleScene = new Phaser.Class({
     return map[role] || 'minion';
   },
 
-  /* ===== Position calculation ===== */
+  /* ===== Position calculation (720x420) ===== */
   _getEntityPosition: function (id, info, isBoss) {
     if (isBoss) {
-      return { x: 480, y: 120 };
+      return { x: 360, y: 80 };
     }
 
     // Characters arranged in a semicircle at bottom
     var charPositions = {
-      tank: { x: 480, y: 460 },
-      healer: { x: 320, y: 480 },
-      mage: { x: 640, y: 480 },
-      rogue: { x: 380, y: 520 },
-      hunter: { x: 580, y: 520 }
+      tank:   { x: 360, y: 310 },
+      healer: { x: 230, y: 330 },
+      mage:   { x: 490, y: 330 },
+      rogue:  { x: 290, y: 360 },
+      hunter: { x: 430, y: 360 }
     };
 
     var role = info.role || info.type;
@@ -189,12 +195,12 @@ var BattleScene = new Phaser.Class({
     if (role === 'minion') {
       var idx = parseInt(id.replace(/\D/g, ''), 10) || 0;
       return {
-        x: 300 + (idx % 4) * 120,
-        y: 200 + Math.floor(idx / 4) * 60
+        x: 220 + (idx % 4) * 90,
+        y: 140 + Math.floor(idx / 4) * 50
       };
     }
 
-    return { x: 480, y: 400 };
+    return { x: 360, y: 280 };
   },
 
   /* ===== Animation Handler ===== */
@@ -318,11 +324,11 @@ var BattleScene = new Phaser.Class({
   /* ===== Blizzard animation ===== */
   _animBlizzard: function (anim, done) {
     var self = this;
-    var count = 20;
+    var count = 15;
     var completed = 0;
 
     for (var i = 0; i < count; i++) {
-      var x = 200 + Math.random() * 560;
+      var x = 150 + Math.random() * 420;
       var delay = Math.random() * 600;
       var ice = this.add.sprite(x, -10, 'fx_ice');
       ice.setScale(1.5);
@@ -331,7 +337,7 @@ var BattleScene = new Phaser.Class({
 
       this.tweens.add({
         targets: ice,
-        y: 500 + Math.random() * 100,
+        y: 340 + Math.random() * 60,
         alpha: 0,
         duration: 800 + Math.random() * 400,
         delay: delay,
@@ -358,7 +364,6 @@ var BattleScene = new Phaser.Class({
     var origY = src.y;
     var self = this;
 
-    // Dash to target
     this.tweens.add({
       targets: src,
       x: to.x + 20,
@@ -366,7 +371,6 @@ var BattleScene = new Phaser.Class({
       duration: 100,
       ease: 'Power3',
       onComplete: function () {
-        // Slash effect
         var slash = self.add.sprite(to.x, to.y, 'fx_slash');
         slash.setScale(2);
         self.fxGroup.add(slash);
@@ -383,7 +387,6 @@ var BattleScene = new Phaser.Class({
           onComplete: function () { slash.destroy(); }
         });
 
-        // Return to position
         self.tweens.add({
           targets: src,
           x: origX,
@@ -482,9 +485,10 @@ var BattleScene = new Phaser.Class({
     this.cameras.main.shake(500, 0.015);
     this.cameras.main.flash(400, 255, 100, 0);
 
-    var phaseText = this.add.text(480, 300, 'PHASE ' + (anim.phase || '?'), {
+    var cx = this.W / 2;
+    var phaseText = this.add.text(cx, 190, 'PHASE ' + (anim.phase || '?'), {
       fontFamily: '"Press Start 2P"',
-      fontSize: '28px',
+      fontSize: '24px',
       color: '#ffcc00',
       stroke: '#000000',
       strokeThickness: 4
@@ -493,7 +497,7 @@ var BattleScene = new Phaser.Class({
 
     this.tweens.add({
       targets: phaseText,
-      y: 260,
+      y: 160,
       alpha: 0,
       scaleX: 1.5,
       scaleY: 1.5,
@@ -529,6 +533,7 @@ var BattleScene = new Phaser.Class({
     if (!pos) { done(); return; }
 
     var completed = 0;
+    var self = this;
     for (var i = 0; i < 5; i++) {
       var p = this.add.sprite(pos.x - 8 + Math.random() * 16, pos.y + 10, 'fx_poison');
       p.setScale(1.5);
@@ -540,14 +545,16 @@ var BattleScene = new Phaser.Class({
         alpha: 0,
         duration: 500,
         delay: i * 80,
-        onComplete: function () {
-          p.destroy();
-          completed++;
-          if (completed >= 5) {
-            if (anim.value) this._showDamageNumber(anim.target_id, anim.value, false);
-            done();
-          }
-        }.bind(this)
+        onComplete: (function (particle, animRef) {
+          return function () {
+            particle.destroy();
+            completed++;
+            if (completed >= 5) {
+              if (animRef.value) self._showDamageNumber(animRef.target_id, animRef.value, false);
+              done();
+            }
+          };
+        })(p, anim)
       });
     }
   },
@@ -587,7 +594,7 @@ var BattleScene = new Phaser.Class({
 
     var dmgText = this.add.text(pos.x + offsetX, pos.y - 20, text, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '14px',
+      fontSize: '12px',
       color: color,
       stroke: '#000000',
       strokeThickness: 3
@@ -596,7 +603,7 @@ var BattleScene = new Phaser.Class({
 
     this.tweens.add({
       targets: dmgText,
-      y: pos.y - 60,
+      y: pos.y - 50,
       alpha: 0,
       duration: 1000,
       ease: 'Power2',
@@ -610,7 +617,6 @@ var BattleScene = new Phaser.Class({
     if (!sprite) return;
 
     sprite.setTint(color);
-    var self = this;
     this.time.delayedCall(120, function () {
       if (sprite.active) sprite.clearTint();
     });
@@ -624,14 +630,13 @@ var BattleScene = new Phaser.Class({
     // Fallback: check last state for position info
     if (this._lastState) {
       if (entityId === 'boss' && this._lastState.boss) {
-        return { x: 480, y: 120 };
+        return { x: 360, y: 80 };
       }
       if (this._lastState.characters) {
         var chars = this._lastState.characters;
         if (chars[entityId]) {
           return this._getEntityPosition(entityId, chars[entityId], false);
         }
-        // Check all characters by id field
         var cKeys = Object.keys(chars);
         for (var i = 0; i < cKeys.length; i++) {
           var c = chars[cKeys[i]];
@@ -648,26 +653,28 @@ var BattleScene = new Phaser.Class({
   _onGameOver: function (data) {
     var result = data && data.result === 'victory' ? 'VICTORY!' : 'DEFEAT...';
     var color = data && data.result === 'victory' ? '#33ff66' : '#ff3333';
+    var cx = this.W / 2;
+    var cy = this.H / 2;
 
     // Darken screen
-    var overlay = this.add.rectangle(480, 320, 960, 640, 0x000000, 0.6);
+    var overlay = this.add.rectangle(cx, cy, this.W, this.H, 0x000000, 0.6);
     overlay.setDepth(100);
 
-    var resultText = this.add.text(480, 280, result, {
+    var resultText = this.add.text(cx, cy - 30, result, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '36px',
+      fontSize: '28px',
       color: color,
       stroke: '#000000',
       strokeThickness: 6
     }).setOrigin(0.5).setDepth(101);
 
-    var subText = this.add.text(480, 340, data && data.message ? data.message : '', {
+    this.add.text(cx, cy + 20, data && data.message ? data.message : '', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '12px',
+      fontSize: '10px',
       color: '#ccccdd',
       stroke: '#000000',
       strokeThickness: 2,
-      wordWrap: { width: 600 }
+      wordWrap: { width: 500 }
     }).setOrigin(0.5).setDepth(101);
 
     this.tweens.add({

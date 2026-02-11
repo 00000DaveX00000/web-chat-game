@@ -53,18 +53,12 @@ async def main() -> None:
             manager.broadcast({"type": "state_update", "data": state})
         )
 
-    def on_combat_log(log):
-        asyncio.ensure_future(
-            manager.broadcast({"type": "combat_log", "data": log})
-        )
-
     def on_game_over(result):
         asyncio.ensure_future(
             manager.broadcast({"type": "game_over", "data": result})
         )
 
     engine.event_bus.on("tick_complete", on_tick_complete)
-    engine.event_bus.on("combat_log_broadcast", on_combat_log)
     engine.event_bus.on("game_over", on_game_over)
 
     # Create agents from team config
@@ -121,13 +115,11 @@ async def main() -> None:
     background_tasks: list[asyncio.Task] = []
 
     async def startup():
-        """Launch agent loops and game engine on FastAPI startup."""
+        """Launch agent loops on FastAPI startup. Game waits for user to click Start."""
         for agent in agents:
             task = asyncio.create_task(agent.run())
             background_tasks.append(task)
-        game_task = asyncio.create_task(engine.start_game())
-        background_tasks.append(game_task)
-        logger.info("Game engine and agents started")
+        logger.info("Agents started, waiting for game start command")
 
     app.add_event_handler("startup", startup)
 

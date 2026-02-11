@@ -67,6 +67,51 @@ class LLMClient:
             logger.exception("LLM call failed")
             return None
 
+    # ------------------------------------------------------------------
+    # Tool Use API
+    # ------------------------------------------------------------------
+
+    async def get_decision_with_tools(
+        self, system_prompt: str, user_prompt: str, tools: list[dict]
+    ) -> dict[str, Any] | None:
+        """Use Anthropic Tool Use API to get a structured decision."""
+        try:
+            resp = await asyncio.wait_for(
+                self._call_api_with_tools(system_prompt, user_prompt, tools),
+                timeout=self.timeout,
+            )
+            return resp
+        except asyncio.TimeoutError:
+            logger.warning("LLM tool call timed out (%.1fs)", self.timeout)
+            return None
+        except Exception:
+            logger.exception("LLM tool call failed")
+            return None
+
+    async def _call_api_with_tools(
+        self, system_prompt: str, user_prompt: str, tools: list[dict]
+    ) -> dict[str, Any] | None:
+        """Call Anthropic API with tools, return {tool_name, tool_input, skill_id, target, reason}."""
+        resp = await self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            tools=tools,
+            tool_choice={"type": "any"},
+        )
+        for block in resp.content:
+            if block.type == "tool_use":
+                return {
+                    "tool_name": block.name,
+                    "tool_input": block.input,
+                    "skill_id": int(block.name.replace("use_", "")),
+                    "target": block.input.get("target", ""),
+                    "reason": block.input.get("reason", ""),
+                }
+        return None
+
     async def _call_api(self, system_prompt: str, user_prompt: str) -> str:
         """Invoke the underlying LLM API and return raw text."""
         if self.provider == "anthropic":

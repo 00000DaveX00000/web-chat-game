@@ -1,14 +1,14 @@
 /**
  * game.js - Phaser 3 game configuration and entry point.
- * Pixel art mode enabled, 960x640 canvas.
+ * Pixel art mode enabled, 720x420 canvas (compact for new layout).
  */
 (function () {
   'use strict';
 
   var config = {
     type: Phaser.CANVAS,
-    width: 960,
-    height: 640,
+    width: 720,
+    height: 420,
     parent: 'game-container',
     backgroundColor: '#050510',
     pixelArt: true,

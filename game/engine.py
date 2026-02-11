@@ -65,6 +65,13 @@ class GameEngine:
     # ------------------------------------------------------------------
     async def start_game(self) -> None:
         """Initialize and start the game loop."""
+        if self.running:
+            return
+
+        # If previous game ended (boss dead / all dead), do a full reset first
+        if self.result or not self.boss.alive:
+            self.reset_game()
+
         self.running = True
         self.tick_count = 0
         self.game_time = 0.0
@@ -78,6 +85,41 @@ class GameEngine:
 
         logger.info("Game started")
         await self.game_loop()
+
+    def stop_game(self) -> None:
+        """Stop the running game."""
+        if not self.running:
+            return
+        self.running = False
+        self.result = self.result or "stopped"
+        self.event_bus.emit(COMBAT_LOG, {
+            "message": "=== 战斗已停止 ===",
+        })
+        logger.info("Game stopped by user")
+
+    def reset_game(self) -> None:
+        """Reset all game state for a fresh start."""
+        self.running = False
+        self.tick_count = 0
+        self.game_time = 0.0
+        self.result = None
+        self._pending_actions.clear()
+        self._god_commands.clear()
+        self.god_command_text = ""
+        self._last_log_index = 0
+        self.event_bus._log.clear()
+
+        # Reset boss
+        self.boss = Boss(self.event_bus)
+
+        # Reset characters
+        for role in list(self.characters.keys()):
+            self.characters[role] = create_character(role, role)
+
+        # Reset combat system
+        self.combat = CombatSystem(self.event_bus)
+
+        logger.info("Game reset")
 
     async def game_loop(self) -> None:
         """Main game loop running at TICK_INTERVAL."""
@@ -164,7 +206,11 @@ class GameEngine:
         return self.characters.get(character_id)
 
     def get_game_state(self) -> dict[str, Any]:
-        """Return complete game state snapshot for agents and websockets."""
+        """Return game state snapshot with incremental combat log.
+
+        Only call from _broadcast_state (once per tick) so the log index
+        advances exactly once.  Agents should use get_state_for_agent().
+        """
         new_logs = self.event_bus.get_log(self._last_log_index)
         self._last_log_index = len(self.event_bus._log)
 
@@ -184,11 +230,40 @@ class GameEngine:
             "god_command": self.god_command_text,
         }
 
+    def get_state_for_agent(self) -> dict[str, Any]:
+        """Return game state snapshot for agent prompts (does NOT consume logs)."""
+        living = [c for c in self.characters.values() if c.alive]
+
+        return {
+            "tick": self.tick_count,
+            "game_time": round(self.game_time, 1),
+            "running": self.running,
+            "result": self.result,
+            "boss": self.boss.to_dict(),
+            "characters": {cid: c.to_dict() for cid, c in self.characters.items()},
+            "threat": self.combat.threat.get_threat_list(),
+            "adds": [a.to_dict() for a in self.boss.adds if a.alive],
+            "living_count": len(living),
+            "god_command": self.god_command_text,
+        }
+
     def get_full_state(self) -> dict[str, Any]:
         """Full state including all logs (for initial connection)."""
-        state = self.get_game_state()
-        state["combat_log"] = self.event_bus.get_log()
-        return state
+        living = [c for c in self.characters.values() if c.alive]
+
+        return {
+            "tick": self.tick_count,
+            "game_time": round(self.game_time, 1),
+            "running": self.running,
+            "result": self.result,
+            "boss": self.boss.to_dict(),
+            "characters": {cid: c.to_dict() for cid, c in self.characters.items()},
+            "threat": self.combat.threat.get_threat_list(),
+            "adds": [a.to_dict() for a in self.boss.adds if a.alive],
+            "living_count": len(living),
+            "combat_log": self.event_bus.get_log(),
+            "god_command": self.god_command_text,
+        }
 
     def register_state_callback(self, cb: Callable[[dict], None]) -> None:
         self._on_state_change.append(cb)
@@ -357,9 +432,27 @@ class GameEngine:
             all_enemies=all_enemies,
         )
 
+        # Build descriptive combat log message
+        target_name = getattr(target, 'name', target_id) if target else '全体'
+        detail = ""
+        if result:
+            if "damage" in result:
+                detail = f" -{result['damage']}"
+            elif "total_damage" in result:
+                detail = f" -{result['total_damage']}"
+            elif "heal" in result:
+                detail = f" +{result['heal']}"
+            elif "total_heal" in result:
+                detail = f" +{result['total_heal']}"
+            elif "taunt_duration" in result:
+                detail = f" 强制攻击{result['taunt_duration']}秒"
+            elif "buff" in result:
+                detail = f" [{result['buff']}]"
+            elif "debuff" in result:
+                detail = f" [{result['debuff']}]"
+
         self.event_bus.emit(COMBAT_LOG, {
-            "message": f"[{char.name}] 使用 {skill.name}" +
-                      (f" -> {result.get('damage', result.get('heal', result.get('buff', '')))}") if result else "",
+            "message": f"[{char.name}] 使用 {skill.name} \u2192 {target_name}{detail}",
         })
 
     def _process_god_commands(self) -> None:
@@ -455,8 +548,10 @@ class GameEngine:
             self.event_bus.emit(COMBAT_LOG, {"message": "[God] 游戏恢复"})
 
         else:
+            # Unrecognized commands are treated as natural language broadcast
+            self.god_command_text = command
             self.event_bus.emit(COMBAT_LOG, {
-                "message": f"[God] 未知命令: {command}",
+                "message": f"[上帝指令] {command}",
             })
 
     # ------------------------------------------------------------------
@@ -486,11 +581,8 @@ class GameEngine:
     # ------------------------------------------------------------------
     def _broadcast_state(self) -> None:
         state = self.get_game_state()
-        # Emit tick_complete event for server broadcast
+        # Emit tick_complete event for server broadcast (includes combat_log)
         self.event_bus.emit("tick_complete", state)
-        # Emit combat_log events for new logs
-        for log_entry in state.get("combat_log", []):
-            self.event_bus.emit("combat_log_broadcast", log_entry)
         # Check game over
         if self.result:
             self.event_bus.emit("game_over", {

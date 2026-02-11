@@ -391,8 +391,16 @@ class CombatSystem:
             "source": "boss", "target": target.id,
             "skill": skill_name, "amount": actual,
         })
+        self.event_bus.emit(COMBAT_LOG, {
+            "message": f"[Boss] {skill_name} \u2192 {target.name}  -{actual} (HP:{target.hp}/{target.max_hp})",
+            "type": "damage",
+        })
         if not target.alive:
             self.event_bus.emit(DEATH, {"target": target.id, "source": skill_name})
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"\u2620 {target.name} \u88AB {skill_name} \u51FB\u6740!",
+                "type": "damage",
+            })
         return actual
 
     def boss_aoe_attack(self, boss: Any, targets: list[Character], damage: int, skill_name: str) -> int:
@@ -409,4 +417,13 @@ class CombatSystem:
             })
             if not t.alive:
                 self.event_bus.emit(DEATH, {"target": t.id, "source": skill_name})
+                self.event_bus.emit(COMBAT_LOG, {
+                    "message": f"\u2620 {t.name} \u88AB {skill_name} \u51FB\u6740!",
+                    "type": "damage",
+                })
+        if total > 0:
+            self.event_bus.emit(COMBAT_LOG, {
+                "message": f"[Boss] {skill_name} AOE \u2192 \u5168\u4F53 -{damage} (\u603B{total})",
+                "type": "damage",
+            })
         return total

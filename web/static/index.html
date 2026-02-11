@@ -6,24 +6,252 @@
   <title>AI Raid Battle - Pixel RPG</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div id="app">
-    <div id="game-area">
-      <div id="game-container"></div>
-      <div id="god-command-bar">
-        <label id="god-label" for="god-input">&gt; GOD CMD:</label>
-        <input id="god-input" type="text" placeholder="Enter divine command..." autocomplete="off">
-        <button id="god-send">SEND</button>
+    <!-- Header Bar -->
+    <div id="header-bar">
+      <div id="phase-badge">P1</div>
+      <div id="header-boss-hp">
+        <div id="header-boss-hp-fill"></div>
+        <span id="header-boss-hp-text">100%</span>
+      </div>
+      <div id="game-timer">00:00</div>
+      <div id="game-controls">
+        <button id="btn-start" class="ctrl-btn start">START</button>
+        <button id="btn-stop" class="ctrl-btn stop" disabled>STOP</button>
+        <button id="btn-restart" class="ctrl-btn restart">RESTART</button>
+      </div>
+      <div id="game-status-badge">WAITING</div>
+      <div id="ws-status">DISCONNECTED</div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-content">
+      <div id="game-column">
+        <div id="game-container"></div>
+      </div>
+      <div id="info-column">
+        <!-- Boss Info Panel -->
+        <div id="boss-info">
+          <div id="boss-info-name">BOSS</div>
+          <div id="boss-hp-bar-wrap">
+            <div id="boss-hp-bar-fill"></div>
+            <span id="boss-hp-text">100%</span>
+          </div>
+          <div id="boss-phase-text">Phase 1</div>
+          <div id="boss-cast-bar" class="hidden">
+            <span id="boss-cast-name"></span>
+            <div id="boss-cast-fill"></div>
+            <span id="boss-cast-time"></span>
+          </div>
+          <div id="boss-mechanics"></div>
+          <div id="boss-debuffs"></div>
+          <div id="boss-enrage" class="hidden"></div>
+        </div>
+        <!-- Battle Log -->
+        <div id="battle-log-container">
+          <div id="log-tabs">
+            <button class="log-tab active" data-filter="all">ALL</button>
+            <button class="log-tab" data-filter="damage">DMG</button>
+            <button class="log-tab" data-filter="heal">HEAL</button>
+            <button class="log-tab" data-filter="mech">MECH</button>
+            <button class="log-tab" data-filter="cmd">指令</button>
+            <button class="log-tab" data-filter="ai_decision">AI响应</button>
+          </div>
+          <div id="battle-log"></div>
+        </div>
       </div>
     </div>
-    <div id="side-panel">
-      <h2 id="log-title">BATTLE LOG</h2>
-      <div id="battle-log"></div>
-      <div id="status-bar">
-        <span id="ws-status">DISCONNECTED</span>
+
+    <!-- Character Strip (WoW-style) -->
+    <div id="char-strip">
+      <div class="char-card" data-role="tank" id="card-tank">
+        <div class="card-header">
+          <span class="card-icon"></span>
+          <span class="card-name"></span>
+          <span class="source-tag waiting"></span>
+        </div>
+        <div class="card-bars">
+          <div class="bar-row hp-row">
+            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="bar-text hp-text"></span>
+          </div>
+          <div class="bar-row mp-row">
+            <div class="bar-bg"><div class="bar-fill mp-fill"></div></div>
+            <span class="bar-text mp-text"></span>
+          </div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="skill-bar">
+          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        </div>
+        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
+        <div class="card-divider"></div>
+        <div class="card-instruction"></div>
+        <div class="card-action"></div>
+        <div class="card-reason"></div>
+        <div class="card-buffs"></div>
+      </div>
+
+      <div class="char-card" data-role="healer" id="card-healer">
+        <div class="card-header">
+          <span class="card-icon"></span>
+          <span class="card-name"></span>
+          <span class="source-tag waiting"></span>
+        </div>
+        <div class="card-bars">
+          <div class="bar-row hp-row">
+            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="bar-text hp-text"></span>
+          </div>
+          <div class="bar-row mp-row">
+            <div class="bar-bg"><div class="bar-fill mp-fill"></div></div>
+            <span class="bar-text mp-text"></span>
+          </div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="skill-bar">
+          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        </div>
+        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
+        <div class="card-divider"></div>
+        <div class="card-instruction"></div>
+        <div class="card-action"></div>
+        <div class="card-reason"></div>
+        <div class="card-buffs"></div>
+      </div>
+
+      <div class="char-card" data-role="mage" id="card-mage">
+        <div class="card-header">
+          <span class="card-icon"></span>
+          <span class="card-name"></span>
+          <span class="source-tag waiting"></span>
+        </div>
+        <div class="card-bars">
+          <div class="bar-row hp-row">
+            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="bar-text hp-text"></span>
+          </div>
+          <div class="bar-row mp-row">
+            <div class="bar-bg"><div class="bar-fill mp-fill"></div></div>
+            <span class="bar-text mp-text"></span>
+          </div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="skill-bar">
+          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        </div>
+        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
+        <div class="card-divider"></div>
+        <div class="card-instruction"></div>
+        <div class="card-action"></div>
+        <div class="card-reason"></div>
+        <div class="card-buffs"></div>
+      </div>
+
+      <div class="char-card" data-role="rogue" id="card-rogue">
+        <div class="card-header">
+          <span class="card-icon"></span>
+          <span class="card-name"></span>
+          <span class="source-tag waiting"></span>
+        </div>
+        <div class="card-bars">
+          <div class="bar-row hp-row">
+            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="bar-text hp-text"></span>
+          </div>
+          <div class="bar-row mp-row">
+            <div class="bar-bg"><div class="bar-fill mp-fill"></div></div>
+            <span class="bar-text mp-text"></span>
+          </div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="skill-bar">
+          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        </div>
+        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
+        <div class="card-divider"></div>
+        <div class="card-instruction"></div>
+        <div class="card-action"></div>
+        <div class="card-reason"></div>
+        <div class="card-buffs"></div>
+      </div>
+
+      <div class="char-card" data-role="hunter" id="card-hunter">
+        <div class="card-header">
+          <span class="card-icon"></span>
+          <span class="card-name"></span>
+          <span class="source-tag waiting"></span>
+        </div>
+        <div class="card-bars">
+          <div class="bar-row hp-row">
+            <div class="bar-bg"><div class="bar-fill hp-fill"></div></div>
+            <span class="bar-text hp-text"></span>
+          </div>
+          <div class="bar-row mp-row">
+            <div class="bar-bg"><div class="bar-fill mp-fill"></div></div>
+            <span class="bar-text mp-text"></span>
+          </div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="skill-bar">
+          <div class="skill-slot" data-idx="0"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="1"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="2"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+          <div class="skill-slot" data-idx="3"><span class="skill-icon"></span><span class="cd-text">RDY</span></div>
+        </div>
+        <div class="card-cast-bar hidden"><div class="card-cast-fill"></div><span class="card-cast-text"></span></div>
+        <div class="card-divider"></div>
+        <div class="card-instruction"></div>
+        <div class="card-action"></div>
+        <div class="card-reason"></div>
+        <div class="card-buffs"></div>
+      </div>
+    </div>
+
+    <!-- Command Bar -->
+    <div id="cmd-bar">
+      <div id="cmd-quick">
+        <button class="quick-btn" data-cmd="say ">SAY</button>
+        <button class="quick-btn" data-cmd="damage boss 5000">DMG</button>
+        <button class="quick-btn" data-cmd="heal tank 3000">HEAL</button>
+        <button class="quick-btn" data-cmd="kill boss">KILL</button>
+        <button class="quick-btn" data-cmd="resurrect tank">REZ</button>
+        <button class="quick-btn" data-cmd="phase 2">PHASE</button>
+        <button class="quick-btn" data-cmd="buff tank shield_wall 30">BUFF</button>
+      </div>
+      <div id="cmd-input-wrap">
+        <span id="cmd-prompt">&gt;</span>
+        <input id="god-input" type="text" placeholder="输入上帝指令 (自然语言也OK)..." autocomplete="off">
+        <button id="god-send">SEND</button>
+      </div>
+      <button id="cmd-help-btn" title="命令帮助">?</button>
+      <div id="cmd-help-panel" class="hidden">
+        <div class="help-title">命令参考</div>
+        <div class="help-row"><b>say &lt;msg&gt;</b> 发送消息</div>
+        <div class="help-row"><b>damage &lt;target&gt; &lt;amt&gt;</b> 造成伤害</div>
+        <div class="help-row"><b>heal &lt;target&gt; &lt;amt&gt;</b> 治疗</div>
+        <div class="help-row"><b>kill &lt;target&gt;</b> 击杀</div>
+        <div class="help-row"><b>resurrect &lt;target&gt;</b> 复活</div>
+        <div class="help-row"><b>phase &lt;1|2|3&gt;</b> 切换阶段</div>
+        <div class="help-row"><b>buff &lt;target&gt; &lt;id&gt; [dur]</b> 添加增益</div>
+        <div class="help-row"><b>进攻/集火/注意治疗</b> 自然语言广播给AI</div>
+        <div class="help-row">target: tank|healer|mage|rogue|hunter|boss</div>
       </div>
     </div>
   </div>

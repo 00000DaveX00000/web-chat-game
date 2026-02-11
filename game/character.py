@@ -77,6 +77,9 @@ class Character:
         self.buffs: list[Buff] = []
         self.debuffs: list[Debuff] = []
 
+        # Last action taken by the AI agent
+        self.last_action: dict | None = None  # {"skill_name": str, "target": str, "reason": str, "source": "ai"|"auto"|"timeout", "time": float}
+
         # Mana regen per tick (passive)
         self._mana_regen_per_tick = 20 if role != "rogue" else 30  # rogues regen energy faster
 
@@ -303,6 +306,7 @@ class Character:
             "buffs": [{"id": b.buff_id, "name": b.name, "duration": round(b.duration, 2), "params": b.params} for b in self.buffs],
             "debuffs": [{"id": d.debuff_id, "name": d.name, "duration": round(d.duration, 2), "params": d.params} for d in self.debuffs],
             "skills": [{"id": s.id, "name": s.name, "cooldown": s.cooldown, "mana_cost": s.mana_cost, "cast_time": s.cast_time, "description": s.description} for s in self.skills],
+            "last_action": self.last_action,
         }
 
 
